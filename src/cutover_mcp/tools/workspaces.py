@@ -41,3 +41,24 @@ async def list_workspaces(limit: int = 50, offset: int = 0) -> dict:
     client = client_mgr.get_client()
     params = {"page[limit]": limit, "page[offset]": offset}
     return await client.request("GET", "core/workspaces", params=params)
+
+
+@mcp.tool()
+async def create_workspace(name: str, description: str = "", key: str = "") -> dict:
+    """
+    Create a new account/workspace.
+
+    :param name: The name of the new workspace/account.
+    :param description: An optional description for the workspace/account.
+    :param key: Required, shortened version of the workspace/account name.
+    :return: A dictionary representing the newly created workspace/account.
+    """
+    client = client_mgr.get_client()
+    payload = {
+        "data": {
+            "type": "workspace",
+            "attributes": { "name": name, "description": description, "key": key }
+        }
+    }
+    
+    return await client.request("POST", "core/workspaces", json_data=payload)
