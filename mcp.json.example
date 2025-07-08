@@ -1,0 +1,11 @@
+{
+	"servers": {
+		"cutover-mcp": {
+			"type": "stdio",
+			"command": "/Users/YOUR-USER-NAME/code/cutover-mcp/.venv/bin/python",
+			"args": ["/Users/YOUR-USER-NAME/code/cutover-mcp/src/cutover_mcp/server.py"],
+			"cwd": ""
+		}
+	},
+	"inputs": []
+}

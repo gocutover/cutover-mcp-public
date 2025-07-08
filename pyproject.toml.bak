@@ -1,0 +1,28 @@
+[tool.poetry]
+name = "cutover-mcp"
+version = "0.2.0"
+description = "An MCP server for interacting with the Cutover API, powered by FastMCP."
+authors = ["Your Name <you@example.com>"]
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.13"
+httpx = "^0.27.0"
+pydantic = "^2.7.1"
+python-dotenv = "^1.0.1"
+mcp = { version = "^1.10.1", extras = ["cli"] }
+typer = {version = "^0.12.3", extras = ["rich"], optional = true}
+
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^8.2.0"
+pytest-asyncio = "^0.23.6"
+respx = "^0.21.0"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.poetry.scripts]
+# The FastMCP CLI is the primary way to run the server
+# cutover-mcp = "cutover_mcp.main:app"

@@ -1,0 +1,30 @@
+[project]
+name = "cutover-mcp"
+version = "0.2.0"
+description = "An MCP server for interacting with the Cutover API, powered by FastMCP."
+authors = [{name = "Your Name", email = "you@example.com"}]
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "httpx>=0.27.0",
+    "pydantic>=2.7.1",
+    "python-dotenv>=1.0.1",
+    "mcp[cli]>=1.10.1",
+    "typer[rich]>=0.12.3; extra == 'rich'",
+    "fastmcp"
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.2.0",
+    "pytest-asyncio>=0.23.6",
+    "respx>=0.21.0"
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project.scripts]
+# The FastMCP CLI is the primary way to run the server
+# cutover-mcp = "cutover_mcp.main:app"
