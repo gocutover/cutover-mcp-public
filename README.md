@@ -1,5 +1,4 @@
-# Cutover MCP (Model Context Protocol)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+# Cutover MCP (Model Context Protocol) [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 An MCP server for interacting with the Cutover API, powered by FastMCP.
 
