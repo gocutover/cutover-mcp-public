@@ -57,3 +57,48 @@ async def update_runbook_task(
     return await client.request(
         "PATCH", f"core/runbooks/{runbook_id}/tasks/{task_id}", json_data=payload
     )
+
+
+@mcp.tool()
+async def start_task(runbook_id: str, task_id: str) -> dict:
+    """
+    Start a specific task in a runbook.
+
+    :param runbook_id: The ID of the runbook containing the task.
+    :param task_id: The ID of the task to start.
+    :return: A dictionary representing the started task.
+    """
+    client = client_mgr.get_client()
+    return await client.request(
+        "PATCH", f"core/runbooks/{runbook_id}/tasks/{task_id}/start"
+    )
+
+
+@mcp.tool()
+async def complete_task(runbook_id: str, task_id: str) -> dict:
+    """
+    Complete a specific task in a runbook.
+
+    :param runbook_id: The ID of the runbook containing the task.
+    :param task_id: The ID of the task to complete.
+    :return: A dictionary representing the completed task.
+    """
+    client = client_mgr.get_client()
+    return await client.request(
+        "PATCH", f"core/runbooks/{runbook_id}/tasks/{task_id}/finish"
+    )
+
+
+@mcp.tool()
+async def skip_task(runbook_id: str, task_id: str) -> dict:
+    """
+    Skip a specific task in a runbook.
+
+    :param runbook_id: The ID of the runbook containing the task.
+    :param task_id: The ID of the task to skip.
+    :return: A dictionary representing the skipped task.
+    """
+    client = client_mgr.get_client()
+    return await client.request(
+        "PATCH", f"core/runbooks/{runbook_id}/tasks/{task_id}/skip"
+    )
