@@ -1,24 +1,33 @@
-from typing import List, Dict, Any, Optional
+from typing import List, Optional
 
 from cutover_mcp.app import mcp
 from cutover_mcp.clients.api import client_mgr
+from cutover_mcp.models import TaskResponse, inject_return_schema
 
 
 @mcp.tool()
-async def add_task_to_runbook(runbook_id: str, name: str, description: str = "") -> dict:
+@inject_return_schema
+async def add_task_to_runbook(runbook_id: str, name: str, description: str = "") -> TaskResponse:
     """
     Add a new task to an existing runbook.
 
     :param runbook_id: The ID of the runbook to add the task to.
     :param name: The name of the new task.
     :param description: An optional description for the task.
-    :return: A dictionary representing the newly created task.
+    :return: A TaskResponse object representing the newly created task.
+
+    JSON Schema of Return Object:
+    ```json
+    {return_schema}
+    ```
+
     """
     client = client_mgr.get_client()
     payload = {
         "data": {"type": "task", "attributes": {"name": name, "description": description}}
     }
-    return await client.request("POST", f"core/runbooks/{runbook_id}/tasks", json_data=payload)
+    response = await client.request("POST", f"core/runbooks/{runbook_id}/tasks", json_data=payload)
+    return TaskResponse(**response)
 
 
 @mcp.tool()
@@ -28,7 +37,7 @@ async def update_runbook_task(
     name: Optional[str] = None,
     description: Optional[str] = None,
     predecessors: Optional[List[str]] = None,
-) -> dict:
+) -> TaskResponse:
     """
     Update an existing task in a runbook (including dependencies, description, etc.).
 
@@ -37,7 +46,7 @@ async def update_runbook_task(
     :param name: The new name for the task.
     :param description: The new description for the task.
     :param predecessors: A list of task IDs that are predecessors to this task.
-    :return: A dictionary representing the updated task.
+    :return: A TaskResponse object representing the updated task.
     """
     client = client_mgr.get_client()
     attributes = {}
@@ -54,51 +63,55 @@ async def update_runbook_task(
         ]
         payload["data"]["relationships"] = {"predecessors": {"data": predecessor_data}}
 
-    return await client.request(
+    response = await client.request(
         "PATCH", f"core/runbooks/{runbook_id}/tasks/{task_id}", json_data=payload
     )
+    return TaskResponse(**response)
 
 
 @mcp.tool()
-async def start_task(runbook_id: str, task_id: str) -> dict:
+async def start_task(runbook_id: str, task_id: str) -> TaskResponse:
     """
     Start a specific task in a runbook.
 
     :param runbook_id: The ID of the runbook containing the task.
     :param task_id: The ID of the task to start.
-    :return: A dictionary representing the started task.
+    :return: A TaskResponse object representing the started task.
     """
     client = client_mgr.get_client()
-    return await client.request(
+    response = await client.request(
         "PATCH", f"core/runbooks/{runbook_id}/tasks/{task_id}/start"
     )
+    return TaskResponse(**response)
 
 
 @mcp.tool()
-async def complete_task(runbook_id: str, task_id: str) -> dict:
+async def complete_task(runbook_id: str, task_id: str) -> TaskResponse:
     """
     Complete a specific task in a runbook.
 
     :param runbook_id: The ID of the runbook containing the task.
     :param task_id: The ID of the task to complete.
-    :return: A dictionary representing the completed task.
+    :return: A TaskResponse object representing the completed task.
     """
     client = client_mgr.get_client()
-    return await client.request(
+    response = await client.request(
         "PATCH", f"core/runbooks/{runbook_id}/tasks/{task_id}/finish"
     )
+    return TaskResponse(**response)
 
 
 @mcp.tool()
-async def skip_task(runbook_id: str, task_id: str) -> dict:
+async def skip_task(runbook_id: str, task_id: str) -> TaskResponse:
     """
     Skip a specific task in a runbook.
 
     :param runbook_id: The ID of the runbook containing the task.
     :param task_id: The ID of the task to skip.
-    :return: A dictionary representing the skipped task.
+    :return: A TaskResponse object representing the skipped task.
     """
     client = client_mgr.get_client()
-    return await client.request(
+    response = await client.request(
         "PATCH", f"core/runbooks/{runbook_id}/tasks/{task_id}/skip"
     )
+    return TaskResponse(**response)
