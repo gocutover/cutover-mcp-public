@@ -1,7 +1,9 @@
 from __future__ import annotations
-from datetime import datetime
-from typing import Any, Generic, List, Literal, Optional, TypeVar, Union
+
 import inspect
+from datetime import datetime
+from typing import Any, Generic, Literal, TypeVar
+
 from pydantic import BaseModel, Field
 
 # --- 1. Generic JSON:API and Helper Models ---
@@ -11,95 +13,125 @@ AttributesType = TypeVar("AttributesType")
 RelationshipsType = TypeVar("RelationshipsType")
 DataType = TypeVar("DataType")
 
+
 class JsonApiIdentifier(BaseModel):
     """A JSON:API resource identifier object."""
+
     id: str
     type: str
+
 
 class Relationship(BaseModel, Generic[DataType]):
     """A JSON:API relationship object."""
-    data: Optional[DataType] = None
-    links: Optional[dict[str, str]] = None
+
+    data: DataType | None = None
+    links: dict[str, str] | None = None
+
 
 class JsonApiObject(BaseModel, Generic[AttributesType, RelationshipsType]):
     """A generic JSON:API resource object."""
+
     id: str
     type: str
     attributes: AttributesType
-    relationships: Optional[RelationshipsType] = None
-    links: Optional[dict[str, str]] = None
-    meta: Optional[dict[str, Any]] = None
+    relationships: RelationshipsType | None = None
+    links: dict[str, str] | None = None
+    meta: dict[str, Any] | None = None
+
 
 class PaginationLinks(BaseModel):
     """Pagination links for a list response."""
-    self: Optional[str] = None
-    first: Optional[str] = None
-    last: Optional[str] = None
-    prev: Optional[str] = None
-    next: Optional[str] = None
+
+    self: str | None = None
+    first: str | None = None
+    last: str | None = None
+    prev: str | None = None
+    next: str | None = None
+
 
 class PageMeta(BaseModel):
     """Pagination metadata."""
+
     number: int
-    total: Optional[int] = None
+    total: int | None = None
+
 
 class ResponseMeta(BaseModel):
     """Top-level metadata for a list response."""
+
     page: PageMeta
+
 
 class JsonApiListResponse(BaseModel, Generic[DataType]):
     """A generic model for a JSON:API list response."""
-    data: List[DataType]
+
+    data: list[DataType]
     meta: ResponseMeta
     links: PaginationLinks
-    included: Optional[List[JsonApiObject]] = []
+    included: list[JsonApiObject] | None = []
+
 
 class JsonApiSingleResponse(BaseModel, Generic[DataType]):
     """A generic model for a JSON:API single resource response."""
+
     data: DataType
-    included: Optional[List[JsonApiObject]] = []
+    included: list[JsonApiObject] | None = []
+
 
 # --- 2. Specific Resource Identifier Models ---
+
 
 class UserIdentifier(JsonApiIdentifier):
     type: Literal["user"]
 
+
 class GenericResourceIdentifier(JsonApiIdentifier):
     type: Literal["author", "folder", "runbook", "runbook_team", "task", "team", "stream", "user", "workspace"]
+
 
 class RunbookIdentifier(JsonApiIdentifier):
     type: Literal["runbook"]
 
+
 class TaskIdentifier(JsonApiIdentifier):
     type: Literal["task"]
+
 
 class StreamIdentifier(JsonApiIdentifier):
     type: Literal["stream"]
 
+
 class RunbookTeamIdentifier(JsonApiIdentifier):
     type: Literal["runbook_team"]
+
 
 class TaskTypeIdentifier(JsonApiIdentifier):
     type: Literal["task_type"]
 
+
 class RunbookVersionIdentifier(JsonApiIdentifier):
     type: Literal["runbook_version"]
 
+
 # --- 3. Action Log Models ---
 
+
 class ActionLogAttributes(BaseModel):
-    event: Optional[str] = None
-    description: Optional[str] = None
-    changes: Optional[dict[str, Any]] = None
-    created_at: Optional[datetime] = None
+    event: str | None = None
+    description: str | None = None
+    changes: dict[str, Any] | None = None
+    created_at: datetime | None = None
+
 
 class ActionLogRelationships(BaseModel):
-    author: Optional[Relationship[UserIdentifier]] = None
-    resource: Optional[Relationship[GenericResourceIdentifier]] = None
-    context: Optional[Relationship[GenericResourceIdentifier]] = None
+    author: Relationship[UserIdentifier] | None = None
+    resource: Relationship[GenericResourceIdentifier] | None = None
+    context: Relationship[GenericResourceIdentifier] | None = None
+
 
 class ActionLogResource(JsonApiObject[ActionLogAttributes, ActionLogRelationships]):
     type: Literal["action_log"]
+
 
 # Final Action Log Response Models
 ActionLogResponse = JsonApiSingleResponse[ActionLogResource]
@@ -108,39 +140,44 @@ ActionLogListResponse = JsonApiListResponse[ActionLogResource]
 
 # --- 4. Task Models ---
 
+
 class CustomFieldValue(BaseModel):
-    name: Optional[str] = None
-    custom_field_id: Optional[str] = Field(None, alias="custom_field_id")
-    value: Union[str, List[str], None]
-    display_name: Optional[str] = Field(None, alias="display_name")
-    read_only: Optional[bool] = Field(None, alias="read_only")
+    name: str | None = None
+    custom_field_id: str | None = Field(None, alias="custom_field_id")
+    value: str | list[str] | None
+    display_name: str | None = Field(None, alias="display_name")
+    read_only: bool | None = Field(None, alias="read_only")
+
 
 class TaskAttributes(BaseModel):
     name: str
-    description: Optional[str] = None
-    duration: Optional[int] = None
-    stage: Optional[Literal["not_startable", "startable", "in_progress", "complete"]] = None
-    start_planned: Optional[datetime] = None
-    end_planned: Optional[datetime] = None
-    start_actual: Optional[datetime] = None
-    end_actual: Optional[datetime] = None
-    start_fixed: Optional[datetime] = None
-    end_fixed: Optional[datetime] = None
-    created_at: Optional[datetime] = None
-    updated_at: Optional[datetime] = None
-    custom_field_values: Optional[List[CustomFieldValue]] = Field(None, alias="custom_field_values")
-    comments_count: Optional[int] = Field(None, alias="comments_count")
+    description: str | None = None
+    duration: int | None = None
+    stage: Literal["not_startable", "startable", "in_progress", "complete"] | None = None
+    start_planned: datetime | None = None
+    end_planned: datetime | None = None
+    start_actual: datetime | None = None
+    end_actual: datetime | None = None
+    start_fixed: datetime | None = None
+    end_fixed: datetime | None = None
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
+    custom_field_values: list[CustomFieldValue] | None = Field(None, alias="custom_field_values")
+    comments_count: int | None = Field(None, alias="comments_count")
+
 
 class TaskRelationships(BaseModel):
-    stream: Optional[Relationship[StreamIdentifier]] = None
-    task_type: Optional[Relationship[TaskTypeIdentifier]] = Field(None, alias="task_type")
-    assignees: Optional[Relationship[List[Union[UserIdentifier, RunbookTeamIdentifier]]]] = None
-    predecessors: Optional[Relationship[List[TaskIdentifier]]] = None
-    successors: Optional[Relationship[List[TaskIdentifier]]] = None
-    runbook_version: Optional[Relationship[RunbookVersionIdentifier]] = Field(None, alias="runbook_version")
+    stream: Relationship[StreamIdentifier] | None = None
+    task_type: Relationship[TaskTypeIdentifier] | None = Field(None, alias="task_type")
+    assignees: Relationship[list[UserIdentifier | RunbookTeamIdentifier]] | None = None
+    predecessors: Relationship[list[TaskIdentifier]] | None = None
+    successors: Relationship[list[TaskIdentifier]] | None = None
+    runbook_version: Relationship[RunbookVersionIdentifier] | None = Field(None, alias="runbook_version")
+
 
 class TaskResource(JsonApiObject[TaskAttributes, TaskRelationships]):
     type: Literal["task"]
+
 
 # Final Task Response Models
 TaskResponse = JsonApiSingleResponse[TaskResource]
@@ -149,37 +186,42 @@ TaskListResponse = JsonApiListResponse[TaskResource]
 
 # --- 5. Runbook Models ---
 
+
 class RunbookAttributes(BaseModel):
     name: str
-    description: Optional[str] = None
+    description: str | None = None
     archived: bool = False
     is_template: bool = Field(False, alias="is_template")
-    stage: Optional[Literal["planning", "active", "paused", "canceled", "complete"]] = None
-    status: Optional[Literal["off", "red", "amber", "green"]] = None
-    template_type: Optional[Literal["off", "default", "snippet"]] = Field(None, alias="template_type")
-    start_planned: Optional[datetime] = None
-    end_planned: Optional[datetime] = None
-    start_scheduled: Optional[datetime] = None
-    end_scheduled: Optional[datetime] = None
-    start_actual: Optional[datetime] = None
-    end_actual: Optional[datetime] = None
-    created_at: Optional[datetime] = None
-    updated_at: Optional[datetime] = None
-    custom_field_values: Optional[List[CustomFieldValue]] = Field(None, alias="custom_field_values")
+    stage: Literal["planning", "active", "paused", "canceled", "complete"] | None = None
+    status: Literal["off", "red", "amber", "green"] | None = None
+    template_type: Literal["off", "default", "snippet"] | None = Field(None, alias="template_type")
+    start_planned: datetime | None = None
+    end_planned: datetime | None = None
+    start_scheduled: datetime | None = None
+    end_scheduled: datetime | None = None
+    start_actual: datetime | None = None
+    end_actual: datetime | None = None
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
+    custom_field_values: list[CustomFieldValue] | None = Field(None, alias="custom_field_values")
+
 
 class RunbookRelationships(BaseModel):
-    workspace: Optional[Relationship[JsonApiIdentifier]] = None
-    folder: Optional[Relationship[JsonApiIdentifier]] = None
-    runbook_type: Optional[Relationship[JsonApiIdentifier]] = Field(None, alias="runbook_type")
-    author: Optional[Relationship[UserIdentifier]] = None
-    current_version: Optional[Relationship[RunbookVersionIdentifier]] = Field(None, alias="current_version")
+    workspace: Relationship[JsonApiIdentifier] | None = None
+    folder: Relationship[JsonApiIdentifier] | None = None
+    runbook_type: Relationship[JsonApiIdentifier] | None = Field(None, alias="runbook_type")
+    author: Relationship[UserIdentifier] | None = None
+    current_version: Relationship[RunbookVersionIdentifier] | None = Field(None, alias="current_version")
+
 
 class RunbookResource(JsonApiObject[RunbookAttributes, RunbookRelationships]):
     type: Literal["runbook"]
 
+
 # Final Runbook Response Models
 RunbookResponse = JsonApiSingleResponse[RunbookResource]
 RunbookListResponse = JsonApiListResponse[RunbookResource]
+
 
 def inject_return_schema(func):
     """
@@ -197,7 +239,7 @@ def inject_return_schema(func):
 
     # Get the return type annotation from the function signature
     try:
-        return_model = func.__annotations__['return']
+        return_model = func.__annotations__["return"]
     except KeyError:
         # No return annotation, so we can't do anything
         return func

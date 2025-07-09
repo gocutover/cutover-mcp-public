@@ -2,7 +2,7 @@
 name = "cutover-mcp"
 version = "0.2.0"
 description = "An MCP server for interacting with the Cutover API, powered by FastMCP."
-authors = [{name = "Your Name", email = "you@example.com"}]
+authors = [{ name = "Cutover", email = "bot@cutover.com" }]
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
@@ -11,14 +11,16 @@ dependencies = [
     "python-dotenv>=1.0.1",
     "mcp[cli]>=1.10.1",
     "typer[rich]>=0.12.3; extra == 'rich'",
-    "fastmcp"
+    "fastmcp",
 ]
 
 [project.optional-dependencies]
 dev = [
     "pytest>=8.2.0",
     "pytest-asyncio>=0.23.6",
-    "respx>=0.21.0"
+    "respx>=0.21.0",
+    "ruff>=0.8.0",
+    "pre-commit>=3.5.0",
 ]
 
 [build-system]
@@ -28,3 +30,39 @@ build-backend = "hatchling.build"
 [project.scripts]
 # The FastMCP CLI is the primary way to run the server
 # cutover-mcp = "cutover_mcp.main:app"
+
+[tool.ruff]
+line-length = 120
+target-version = "py313"
+src = ["src"]
+
+[tool.ruff.lint]
+select = [
+    "E",   # pycodestyle errors
+    "W",   # pycodestyle warnings
+    "F",   # pyflakes
+    "I",   # isort
+    "N",   # pep8-naming
+    "UP",  # pyupgrade
+    "B",   # flake8-bugbear
+    "C4",  # flake8-comprehensions
+    "PT",  # flake8-pytest-style
+    "SIM", # flake8-simplify
+    "RUF", # Ruff-specific rules
+]
+ignore = [
+    "E501", # line too long (handled by formatter)
+    "B008", # do not perform function calls in argument defaults
+]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+skip-magic-trailing-comma = false
+line-ending = "auto"
+
+[tool.ruff.lint.isort]
+known-first-party = ["cutover_mcp"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["PT003", "PT004"]
