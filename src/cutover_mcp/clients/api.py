@@ -1,23 +1,24 @@
-import os
 import asyncio
 import logging
-from typing import Optional, Dict, Any, Union
+import os
+from typing import Any
 
 import httpx
 
-
 logger = logging.getLogger(__name__)
+
 
 class APIClient:
     """
     A thin convenience wrapper around one shared httpx.AsyncClient.
     This class should not be instantiated directly; use the client_mgr.
     """
+
     def __init__(self, base_url: str, api_key: str, timeout: float = 30.0):
         self.base_url = base_url.rstrip("/")
         self.api_key = api_key
         self.timeout = timeout
-        self._client: Optional[httpx.AsyncClient] = None
+        self._client: httpx.AsyncClient | None = None
 
     async def _get_client(self) -> httpx.AsyncClient:
         """Lazily create and cache the underlying httpx.AsyncClient."""
@@ -43,14 +44,14 @@ class APIClient:
         self,
         method: str,
         endpoint: str,
-        json_data: Optional[Dict[str, Any]] = None,
-        params: Optional[Dict[str, Any]] = None,
-    ) -> Dict[str, Any]:
+        json_data: dict[str, Any] | None = None,
+        params: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
         """Make an HTTP request with opinionated error handling."""
         client = await self._get_client()
         url = f"{self.base_url}/{endpoint.lstrip('/')}"
 
-        for attempt in range(3): # Retry logic
+        for attempt in range(3):  # Retry logic
             try:
                 response = await client.request(
                     method=method.upper(),
@@ -62,19 +63,21 @@ class APIClient:
                 # Return empty dict for 204 No Content responses
                 return response.json() if response.status_code != 204 else {}
             except (httpx.RequestError, httpx.HTTPStatusError) as e:
-                if attempt == 2 or isinstance(e, httpx.HTTPStatusError) and 400 <= e.response.status_code < 500:
+                if attempt == 2 or (isinstance(e, httpx.HTTPStatusError) and 400 <= e.response.status_code < 500):
                     logger.error("API request failed for %s: %s", url, e)
                     raise
                 delay = 2**attempt
-                logger.warning("API error for %s: %s – retrying in %ss", url, e, delay)
+                logger.warning("API error for %s: %s. Retrying in %ss", url, e, delay)
                 await asyncio.sleep(delay)
-        raise ConnectionError("API request failed after multiple retries.") # Should not be reached
+        raise ConnectionError("API request failed after multiple retries.")  # Should not be reached
+
 
 class APIClientManager:
     """
     A small pool to manage APIClient instances, keyed by base_url and api_key.
     This ensures we reuse clients efficiently.
     """
+
     def __init__(self):
         self._clients: dict[str, APIClient] = {}
 
@@ -97,6 +100,6 @@ class APIClientManager:
             await client.aclose()
         self._clients.clear()
 
+
 # Singleton instance used throughout the application
 client_mgr = APIClientManager()
-

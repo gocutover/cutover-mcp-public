@@ -1,12 +1,12 @@
 # src/cutover_mcp/app.py
-from fastmcp import FastMCP
-from contextlib import asynccontextmanager
-from collections.abc import AsyncIterator
-from cutover_mcp.clients.api import APIClientManager
 import logging
-
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 
 from dotenv import load_dotenv
+from fastmcp import FastMCP
+
+from cutover_mcp.clients.api import APIClientManager
 
 # This is the central server instance that all other modules will import
 # to register their tools and resources.
@@ -15,9 +15,9 @@ load_dotenv()
 logger = logging.getLogger(__name__)
 
 mcp = FastMCP(
-    name="Cutover MCP Server",
-    instructions="A set of tools and resources for interacting with the Cutover platform."
+    name="Cutover MCP Server", instructions="A set of tools and resources for interacting with the Cutover platform."
 )
+
 
 @asynccontextmanager
 async def app_lifespan(server: FastMCP) -> AsyncIterator[None]:
@@ -28,6 +28,7 @@ async def app_lifespan(server: FastMCP) -> AsyncIterator[None]:
     yield
     logger.info("Server shutting down...")
     await client_manager.close_all()
+
 
 # Attach the lifespan manager to our imported mcp object
 mcp.lifespan = app_lifespan

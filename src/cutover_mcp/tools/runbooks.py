@@ -1,8 +1,8 @@
-from typing import Optional, Dict, Any
+from typing import Any
 
 from cutover_mcp.app import mcp
 from cutover_mcp.clients.api import client_mgr
-from cutover_mcp.models import RunbookResponse, TaskListResponse, RunbookListResponse,inject_return_schema
+from cutover_mcp.models import RunbookListResponse, RunbookResponse, TaskListResponse, inject_return_schema
 
 
 @mcp.tool()
@@ -66,9 +66,7 @@ async def create_runbook(workspace_id: str, name: str, description: str = "") ->
         "data": {
             "type": "runbook",
             "attributes": {"name": name, "description": description},
-            "relationships": {
-                "workspace": {"data": {"type": "workspace", "id": workspace_id}}
-            },
+            "relationships": {"workspace": {"data": {"type": "workspace", "id": workspace_id}}},
         }
     }
     response = await client.request("POST", "core/runbooks", json_data=payload)
@@ -79,15 +77,15 @@ async def create_runbook(workspace_id: str, name: str, description: str = "") ->
 async def manage_runbook(
     runbook_id: str,
     action: str,
-    comms: Optional[str] = None,
-    disable_task_notify: Optional[bool] = False,
-    run_type: Optional[str] = None,
-    rebaseline: Optional[bool] = False,
-    shift_fixed_times: Optional[bool] = False,
-    validation_level: Optional[str] = "error",
-    message: Optional[str] = None,
-    notify: Optional[bool] = False,
-) -> Dict[str, Any]:
+    comms: str | None = None,
+    disable_task_notify: bool | None = False,
+    run_type: str | None = None,
+    rebaseline: bool | None = False,
+    shift_fixed_times: bool | None = False,
+    validation_level: str | None = "error",
+    message: str | None = None,
+    notify: bool | None = False,
+) -> dict[str, Any]:
     """
     Manage a specific runbook by performing an action (start, cancel, pause, resume). These are the only possible actions with this tool.
 

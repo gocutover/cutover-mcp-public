@@ -1,11 +1,11 @@
-from typing import Optional, Dict, Any
+from typing import Any
 
 from cutover_mcp.app import mcp
 from cutover_mcp.clients.api import client_mgr
 
 
 @mcp.tool()
-async def get_workspace_by_id(workspace_id: str) -> Dict[str, Any]:
+async def get_workspace_by_id(workspace_id: str) -> dict[str, Any]:
     """
     Fetch details for a specific workspace by its ID.
 
@@ -17,7 +17,7 @@ async def get_workspace_by_id(workspace_id: str) -> Dict[str, Any]:
 
 
 @mcp.tool()
-async def query_workspaces(query: str) -> Dict[str, Any]:
+async def query_workspaces(query: str) -> dict[str, Any]:
     """
     Search for workspaces by name or query string.
 
@@ -57,8 +57,12 @@ async def create_workspace(name: str, description: str = "", key: str = "") -> d
     payload = {
         "data": {
             "type": "workspace",
-            "attributes": { "name": name, "description": description, "key": key }
-        }
+            "attributes": {
+                "name": name,
+                "description": description,
+                "key": key,
+            },
+        },
     }
-    
+
     return await client.request("POST", "core/workspaces", json_data=payload)
