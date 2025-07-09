@@ -2,54 +2,64 @@ from typing import Optional, Dict, Any
 
 from cutover_mcp.app import mcp
 from cutover_mcp.clients.api import client_mgr
+from cutover_mcp.models import RunbookResponse, TaskListResponse, RunbookListResponse,inject_return_schema
 
 
 @mcp.tool()
-async def get_runbook_by_id(runbook_id: str) -> Dict[str, Any]:
+@inject_return_schema
+async def get_runbook_by_id(runbook_id: str) -> RunbookResponse:
     """
     Fetch details for a specific runbook by its ID.
 
     :param runbook_id: The unique identifier for the runbook.
-    :return: A dictionary containing the runbook details.
+    :return: A RunbookResponse object containing the runbook details.
+
+    JSON Schema of Return Object:
+    ```json
+    {return_schema}
+    ```
     """
     client = client_mgr.get_client()
-    return await client.request("GET", f"core/runbooks/{runbook_id}")
+    response = await client.request("GET", f"core/runbooks/{runbook_id}")
+    return RunbookResponse(**response)
 
 
 @mcp.tool()
-async def list_runbooks(workspace_id: str) -> Dict[str, Any]:
+async def list_runbooks(workspace_id: str) -> RunbookListResponse:
     """
     List all runbooks in a specific workspace.
 
     :param workspace_id: The unique identifier for the workspace.
-    :return: A dictionary containing a list of runbooks.
+    :return: A RunbookListResponse object containing a list of runbooks.
     """
     client = client_mgr.get_client()
     params = {"workspace_id": workspace_id}
-    return await client.request("GET", "core/runbooks", params=params)
+    response = await client.request("GET", "core/runbooks", params=params)
+    return RunbookListResponse(**response)
 
 
 @mcp.tool()
-async def get_runbook_tasks(runbook_id: str) -> Dict[str, Any]:
+async def get_runbook_tasks(runbook_id: str) -> TaskListResponse:
     """
     Fetch all tasks for a specific runbook.
 
     :param runbook_id: The unique identifier for the runbook.
-    :return: A dictionary containing a list of tasks for the specified runbook.
+    :return: A TaskListResponse object containing a list of tasks for the specified runbook.
     """
     client = client_mgr.get_client()
-    return await client.request("GET", f"core/runbooks/{runbook_id}/tasks")
+    response = await client.request("GET", f"core/runbooks/{runbook_id}/tasks")
+    return TaskListResponse(**response)
 
 
 @mcp.tool()
-async def create_runbook(workspace_id: str, name: str, description: str = "") -> dict:
+async def create_runbook(workspace_id: str, name: str, description: str = "") -> RunbookResponse:
     """
     Create a new runbook in a workspace.
 
     :param workspace_id: The ID of the workspace to create the runbook in.
     :param name: The name of the new runbook.
     :param description: An optional description for the runbook.
-    :return: A dictionary representing the newly created runbook.
+    :return: A RunbookResponse object representing the newly created runbook.
     """
     client = client_mgr.get_client()
     payload = {
@@ -61,7 +71,8 @@ async def create_runbook(workspace_id: str, name: str, description: str = "") ->
             },
         }
     }
-    return await client.request("POST", "core/runbooks", json_data=payload)
+    response = await client.request("POST", "core/runbooks", json_data=payload)
+    return RunbookResponse(**response)
 
 
 @mcp.tool()
