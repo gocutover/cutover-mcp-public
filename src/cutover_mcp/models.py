@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import inspect
 from datetime import datetime
-from typing import Any, Generic, Literal, TypeVar
+from typing import Any, Generic, Literal, TypeVar, Union, _GenericAlias, get_args, get_origin
 
 from pydantic import BaseModel, Field
 
@@ -223,12 +223,71 @@ RunbookResponse = JsonApiSingleResponse[RunbookResource]
 RunbookListResponse = JsonApiListResponse[RunbookResource]
 
 
+def generate_compact_schema_text(model: type[BaseModel], indent: int = 0, visited: set | None = None) -> str:
+    """
+    Recursively generates a compact, human-readable text representation
+    of a Pydantic model's schema.
+    """
+    if visited is None:
+        visited = set()
+
+    if model in visited:
+        return f"{' ' * indent}{model.__name__} (circular reference)\n"
+
+    visited.add(model)
+
+    schema_text = ""
+    for field_name, field_info in model.model_fields.items():
+        # Get the type annotation
+        field_type = field_info.annotation
+
+        # Handle optional types (Union[T, None])
+        is_optional = False
+        if get_origin(field_type) is Union:
+            args = get_args(field_type)
+            if len(args) == 2 and type(None) in args:
+                is_optional = True
+                # Get the non-None type
+                field_type = args[0] if args[1] is type(None) else args[1]
+
+        # Handle list types
+        is_list = False
+        if get_origin(field_type) in (list, _GenericAlias) and get_args(field_type):
+            is_list = True
+            list_item_type = get_args(field_type)[0]
+            type_name = f"list[{list_item_type.__name__}]"
+        else:
+            type_name = getattr(field_type, "__name__", str(field_type))
+
+        # Build the line for the current field
+        line = f"{' ' * indent}{field_name}: {type_name}"
+        if is_optional:
+            line += " (optional)"
+        schema_text += line + "\n"
+
+        # Recurse for nested Pydantic models
+        nested_model = None
+        if is_list:
+            # Check if the items in the list are Pydantic models
+            if inspect.isclass(list_item_type) and issubclass(list_item_type, BaseModel):
+                nested_model = list_item_type
+        elif inspect.isclass(field_type) and issubclass(field_type, BaseModel):
+            nested_model = field_type
+
+        if nested_model:
+            # Add a header for the nested definition and recurse
+            schema_text += f"{' ' * (indent + 2)}-> {nested_model.__name__} details:\n"
+            schema_text += generate_compact_schema_text(nested_model, indent + 4, visited)
+
+    return schema_text
+
+
 def inject_return_schema(func):
     """
-    Dynamically injects the JSON schema of a function's Pydantic
-    return type into its docstring.
+    Dynamically injects a compact, token-efficient text representation of a
+    function's Pydantic return type into its docstring.
 
-    It replaces the placeholder '{return_schema}' with the schema.
+    It replaces the placeholder '{return_schema}' with the compact schema.
     """
     if not func.__doc__:
         return func
@@ -237,17 +296,15 @@ def inject_return_schema(func):
     if placeholder not in func.__doc__:
         return func
 
-    # Get the return type annotation from the function signature
     try:
         return_model = func.__annotations__["return"]
     except KeyError:
-        # No return annotation, so we can't do anything
         return func
 
     # Check if the annotation is a Pydantic model class
     if inspect.isclass(return_model) and issubclass(return_model, BaseModel):
-        # Generate the schema from the discovered model and replace the placeholder
-        schema_string = return_model.schema_json(indent=4)
+        # Generate the compact schema and replace the placeholder
+        schema_string = generate_compact_schema_text(return_model)
         func.__doc__ = func.__doc__.replace(placeholder, schema_string)
 
     return func
