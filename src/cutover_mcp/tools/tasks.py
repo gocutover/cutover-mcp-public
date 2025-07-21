@@ -5,13 +5,16 @@ from cutover_mcp.models import TaskResponse, inject_return_schema
 
 @mcp.tool()
 @inject_return_schema
-async def add_task_to_runbook(runbook_id: str, name: str, description: str = "") -> TaskResponse:
+async def add_task_to_runbook(
+    runbook_id: str, name: str, description: str = "", task_type_id: int | None = None
+) -> TaskResponse:
     """
     Add a new task to an existing runbook.
 
     :param runbook_id: The ID of the runbook to add the task to.
     :param name: The name of the new task.
     :param description: An optional description for the task.
+    :param task_type_id: The ID of the task type to associate with this task.
     :return: A TaskResponse object representing the newly created task.
 
     JSON Schema of Return Object:
@@ -22,6 +25,10 @@ async def add_task_to_runbook(runbook_id: str, name: str, description: str = "")
     """
     client = client_mgr.get_client()
     payload = {"data": {"type": "task", "attributes": {"name": name, "description": description}}}
+
+    if task_type_id is not None:
+        payload["data"]["relationships"] = {"task_type": {"data": {"id": str(task_type_id), "type": "task_type"}}}
+
     response = await client.request("POST", f"core/runbooks/{runbook_id}/tasks", json_data=payload)
     return TaskResponse(**response)
 
@@ -33,6 +40,7 @@ async def update_runbook_task(
     name: str | None = None,
     description: str | None = None,
     predecessors: list[str] | None = None,
+    task_type_id: int | None = None,
 ) -> TaskResponse:
     """
     Update an existing task in a runbook (including dependencies, description, etc.).
@@ -42,6 +50,7 @@ async def update_runbook_task(
     :param name: The new name for the task.
     :param description: The new description for the task.
     :param predecessors: A list of task IDs that are predecessors to this task.
+    :param task_type_id: The ID of the task type to associate with this task.
     :return: A TaskResponse object representing the updated task.
     """
     client = client_mgr.get_client()
@@ -53,9 +62,17 @@ async def update_runbook_task(
 
     payload = {"data": {"type": "task", "id": task_id, "attributes": attributes}}
 
+    relationships = {}
+
     if predecessors is not None:
         predecessor_data = [{"id": pred_id, "type": "task"} for pred_id in predecessors]
-        payload["data"]["relationships"] = {"predecessors": {"data": predecessor_data}}
+        relationships["predecessors"] = {"data": predecessor_data}
+
+    if task_type_id is not None:
+        relationships["task_type"] = {"data": {"id": str(task_type_id), "type": "task_type"}}
+
+    if relationships:
+        payload["data"]["relationships"] = relationships
 
     response = await client.request("PATCH", f"core/runbooks/{runbook_id}/tasks/{task_id}", json_data=payload)
     return TaskResponse(**response)
