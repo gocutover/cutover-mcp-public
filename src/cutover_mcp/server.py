@@ -9,7 +9,7 @@ from cutover_mcp.app import mcp
 # Import modules to register their components. This is the magic step.
 # Because these modules also import `mcp` from `app.py`, their decorators
 # will register tools and resources on the correct central instance.
-from cutover_mcp.tools import action_log, runbooks, task_types, tasks, workspaces  # noqa: F401
+from cutover_mcp.tools import action_log, runbooks, streams, task_types, tasks, workspaces  # noqa: F401
 
 # Load environment variables from .env file first
 load_dotenv()

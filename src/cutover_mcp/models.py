@@ -184,14 +184,51 @@ TaskResponse = JsonApiSingleResponse[TaskResource]
 TaskListResponse = JsonApiListResponse[TaskResource]
 
 
-# --- 5. Runbook Models ---
+# --- 5. Stream Models ---
+
+
+class StreamAttributes(BaseModel):
+    name: str
+    description: str | None = None
+    color: str | None = None
+    is_primary: bool | None = Field(None, alias="is_primary")
+    status: Literal["off", "red", "amber", "green"] | None = None
+    status_message: str | None = Field(None, alias="status_message")
+    status_updated_at: datetime | None = Field(None, alias="status_updated_at")
+    start_planned: datetime | None = Field(None, alias="start_planned")
+    end_planned: datetime | None = Field(None, alias="end_planned")
+    start_latest_planned: datetime | None = Field(None, alias="start_latest_planned")
+    end_latest_planned: datetime | None = Field(None, alias="end_latest_planned")
+    start_display: datetime | None = Field(None, alias="start_display")
+    end_display: datetime | None = Field(None, alias="end_display")
+    created_at: datetime | None = Field(None, alias="created_at")
+    updated_at: datetime | None = Field(None, alias="updated_at")
+    tasks_count: int | None = Field(None, alias="tasks_count")
+
+
+class StreamRelationships(BaseModel):
+    parent: Relationship[StreamIdentifier] | None = None
+    runbook_version: Relationship[RunbookVersionIdentifier] | None = Field(None, alias="runbook_version")
+    status_author: Relationship[UserIdentifier] | None = Field(None, alias="status_author")
+
+
+class StreamResource(JsonApiObject[StreamAttributes, StreamRelationships]):
+    type: Literal["stream"]
+
+
+# Final Stream Response Models
+StreamResponse = JsonApiSingleResponse[StreamResource]
+StreamListResponse = JsonApiListResponse[StreamResource]
+
+
+# --- 6. Runbook Models ---
 
 
 class RunbookAttributes(BaseModel):
     name: str
     description: str | None = None
     archived: bool = False
-    is_template: bool = Field(False, alias="is_template")
+    is_template: bool | None = Field(False, alias="is_template")
     stage: Literal["planning", "active", "paused", "canceled", "complete"] | None = None
     status: Literal["off", "red", "amber", "green"] | None = None
     template_type: Literal["off", "default", "snippet"] | None = Field(None, alias="template_type")

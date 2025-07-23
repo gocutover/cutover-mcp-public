@@ -6,7 +6,7 @@ from cutover_mcp.models import TaskResponse, inject_return_schema
 @mcp.tool()
 @inject_return_schema
 async def add_task_to_runbook(
-    runbook_id: str, name: str, description: str = "", task_type_id: int | None = None
+    runbook_id: str, name: str, description: str = "", task_type_id: str | None = None, stream_id: str | None = None
 ) -> TaskResponse:
     """
     Add a new task to an existing runbook.
@@ -15,6 +15,7 @@ async def add_task_to_runbook(
     :param name: The name of the new task.
     :param description: An optional description for the task.
     :param task_type_id: The ID of the task type to associate with this task.
+    :param stream_id: The ID of the stream to assign the task to (can be a substream).
     :return: A TaskResponse object representing the newly created task.
 
     JSON Schema of Return Object:
@@ -26,8 +27,16 @@ async def add_task_to_runbook(
     client = client_mgr.get_client()
     payload = {"data": {"type": "task", "attributes": {"name": name, "description": description}}}
 
+    relationships = {}
+
     if task_type_id is not None:
-        payload["data"]["relationships"] = {"task_type": {"data": {"id": str(task_type_id), "type": "task_type"}}}
+        relationships["task_type"] = {"data": {"id": task_type_id, "type": "task_type"}}
+
+    if stream_id is not None:
+        relationships["stream"] = {"data": {"id": stream_id, "type": "stream"}}
+
+    if relationships:
+        payload["data"]["relationships"] = relationships
 
     response = await client.request("POST", f"core/runbooks/{runbook_id}/tasks", json_data=payload)
     return TaskResponse(**response)
@@ -40,10 +49,11 @@ async def update_runbook_task(
     name: str | None = None,
     description: str | None = None,
     predecessors: list[str] | None = None,
-    task_type_id: int | None = None,
+    task_type_id: str | None = None,
+    stream_id: str | None = None,
 ) -> TaskResponse:
     """
-    Update an existing task in a runbook (including dependencies, description, etc.).
+    Update an existing task in a runbook (including dependencies, description, stream, etc.).
 
     :param runbook_id: The ID of the runbook containing the task.
     :param task_id: The ID of the task to update.
@@ -51,6 +61,7 @@ async def update_runbook_task(
     :param description: The new description for the task.
     :param predecessors: A list of task IDs that are predecessors to this task.
     :param task_type_id: The ID of the task type to associate with this task.
+    :param stream_id: The ID of the stream to assign the task to (can be a substream).
     :return: A TaskResponse object representing the updated task.
     """
     client = client_mgr.get_client()
@@ -69,7 +80,10 @@ async def update_runbook_task(
         relationships["predecessors"] = {"data": predecessor_data}
 
     if task_type_id is not None:
-        relationships["task_type"] = {"data": {"id": str(task_type_id), "type": "task_type"}}
+        relationships["task_type"] = {"data": {"id": task_type_id, "type": "task_type"}}
+
+    if stream_id is not None:
+        relationships["stream"] = {"data": {"id": stream_id, "type": "stream"}}
 
     if relationships:
         payload["data"]["relationships"] = relationships
