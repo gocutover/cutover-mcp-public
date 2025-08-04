@@ -50,23 +50,118 @@ async def get_runbook_tasks(runbook_id: str) -> TaskListResponse:
     response = await client.request("GET", f"core/runbooks/{runbook_id}/tasks")
     return TaskListResponse(**response)
 
-
 @mcp.tool()
-async def create_runbook(workspace_id: str, name: str, description: str = "") -> RunbookResponse:
+async def update_runbook(
+    runbook_id: str,
+    name: str = None,
+    description: str = None,
+    status: str = None,
+    is_template: bool = None,
+    rto: int = None,
+    timezone: str = None,
+    rto_end_task: str = None,
+    rto_start_task: str = None
+) -> RunbookResponse:
     """
-    Create a new runbook in a workspace.
+    Update a specific runbook's fields.
 
-    :param workspace_id: The ID of the workspace to create the runbook in.
-    :param name: The name of the new runbook.
-    :param description: An optional description for the runbook.
-    :return: A RunbookResponse object representing the newly created runbook.
+    :param runbook_id: The unique identifier for the runbook (required).
+    :param name: The new name for the runbook (optional).
+    :param description: The new description for the runbook (optional).
+    :param status: The new RAG status for the runbook (Allowed: off, red, amber, green).
+    :param is_template: Whether the runbook is a template (optional, true/false).
+    :param rto: Recovery Time Objective in seconds (optional).
+    :param timezone: IANA Timezone name (optional).
+    :param rto_start_task: ID of the start task for RTO/RTA feature (optional, relationship field).
+    :param rto_end_task: ID of the end task for RTO/RTA feature (optional, relationship field).
+    :return: A RunbookResponse object representing the updated runbook.
     """
     client = client_mgr.get_client()
+    attributes = {}
+    if name is not None:
+        attributes["name"] = name
+    if description is not None:
+        attributes["description"] = description
+    if status is not None:
+        attributes["status"] = status
+    if is_template is not None:
+        attributes["is_template"] = is_template
+    if rto is not None:
+        attributes["rto"] = rto
+    if timezone is not None:
+        attributes["timezone"] = timezone
+
+    relationships = {}
+    if rto_start_task is not None:
+        relationships["rto_start_task"] = {"data": {"type": "task", "id": rto_start_task}}
+    if rto_end_task is not None:
+        relationships["rto_end_task"] = {"data": {"type": "task", "id": rto_end_task}}
+
     payload = {
         "data": {
             "type": "runbook",
-            "attributes": {"name": name, "description": description},
-            "relationships": {"workspace": {"data": {"type": "workspace", "id": workspace_id}}},
+            "id": runbook_id,
+            "attributes": attributes,
+        }
+    }
+    if relationships:
+        payload["data"]["relationships"] = relationships
+
+    response = await client.request("PATCH", f"core/runbooks/{runbook_id}", json_data=payload)
+    return RunbookResponse(**response)
+
+@mcp.tool()
+async def create_runbook(
+    workspace_id: str,
+    name: str,
+    description: str = "",
+    status: str = None,
+    is_template: bool = None,
+    rto: int = None,
+    timezone: str = None,
+    rto_end_task: str = None,
+    rto_start_task: str = None,
+    runbook_type_id: str = None
+) -> RunbookResponse:
+    """
+    Create a new runbook in a workspace.
+
+    :param workspace_id: The ID of the workspace to create the runbook in (required, relationship field).
+    :param name: The name of the new runbook.
+    :param description: An optional description for the runbook.
+    :param status: The new RAG status for the runbook (Allowed: off, red, amber, green).
+    :param is_template: Whether the runbook is a template (optional, true/false).
+    :param rto: Recovery Time Objective (RTO) in seconds (optional).
+    :param timezone: IANA Timezone name (optional).
+    :param runbook_type_id: The ID of the runbook type to associate with this runbook (optional, relationship field).
+    :param rto_start_task: ID of the start task for RTO/RTA feature (optional, relationship field).
+    :param rto_end_task: ID of the end task for RTO/RTA feature (optional, relationship field).
+    :return: A RunbookResponse object representing the newly created runbook.
+    """
+    client = client_mgr.get_client()
+    attributes = {"name": name, "description": description}
+    if status is not None:
+        attributes["status"] = status
+    if is_template is not None:
+        attributes["is_template"] = is_template
+    if rto is not None:
+        attributes["rto"] = rto
+    if timezone is not None:
+        attributes["timezone"] = timezone
+
+    relationships = {"workspace": {"data": {"type": "workspace", "id": workspace_id}}}
+    if runbook_type_id is not None:
+        relationships["runbook_type"] = {"data": {"type": "runbook_type", "id": runbook_type_id}}
+    if rto_start_task is not None:
+        relationships["rto_start_task"] = {"data": {"type": "task", "id": rto_start_task}}
+    if rto_end_task is not None:
+        relationships["rto_end_task"] = {"data": {"type": "task", "id": rto_end_task}}
+
+    payload = {
+        "data": {
+            "type": "runbook",
+            "attributes": attributes,
+            "relationships": relationships,
         }
     }
     response = await client.request("POST", "core/runbooks", json_data=payload)
