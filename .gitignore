@@ -17,3 +17,4 @@ poetry.lock
 .vscode/
 
 .DS_Store
+mcp.json
