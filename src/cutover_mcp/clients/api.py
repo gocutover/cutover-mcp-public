@@ -14,23 +14,27 @@ class APIClient:
     This class should not be instantiated directly; use the client_mgr.
     """
 
-    def __init__(self, base_url: str, api_key: str, timeout: float = 30.0):
+    def __init__(self, base_url: str, api_key: str, timeout: float = 30.0, core_url: str | None = None):
         self.base_url = base_url.rstrip("/")
         self.api_key = api_key
         self.timeout = timeout
+        self.core_url = core_url
         self._client: httpx.AsyncClient | None = None
 
     async def _get_client(self) -> httpx.AsyncClient:
         """Lazily create and cache the underlying httpx.AsyncClient."""
         if self._client is None:
+            headers = {
+                "Accept": "application/json",
+                "Content-Type": "application/json",
+                "User-Agent": "CutoverMCP/0.3.0",
+                "Authorization": f"Bearer {self.api_key}",
+            }
+            if self.core_url:
+                headers["Core-Url"] = self.core_url
             self._client = httpx.AsyncClient(
                 timeout=self.timeout,
-                headers={
-                    "Accept": "application/json",
-                    "Content-Type": "application/json",
-                    "User-Agent": "CutoverMCP/0.3.0",
-                    "Authorization": f"Bearer {self.api_key}",
-                },
+                headers=headers,
             )
         return self._client
 
@@ -85,13 +89,14 @@ class APIClientManager:
         """Gets a client based on environment variables."""
         base_url = os.getenv("CUTOVER_BASE_URL")
         api_key = os.getenv("CUTOVER_API_TOKEN")
+        core_url = os.getenv("CUTOVER_CORE_URL")
 
         if not base_url or not api_key:
             raise ValueError("CUTOVER_BASE_URL and CUTOVER_API_TOKEN must be set.")
 
-        key = f"{base_url}|{api_key}"
+        key = f"{base_url}|{api_key}|{core_url}"
         if key not in self._clients:
-            self._clients[key] = APIClient(base_url, api_key)
+            self._clients[key] = APIClient(base_url, api_key, core_url=core_url)
         return self._clients[key]
 
     async def close_all(self) -> None:

@@ -232,6 +232,8 @@ class RunbookAttributes(BaseModel):
     stage: Literal["planning", "active", "paused", "canceled", "complete"] | None = None
     status: Literal["off", "red", "amber", "green"] | None = None
     template_type: Literal["off", "default", "snippet"] | None = Field(None, alias="template_type")
+    rto: int | None = None  # Recovery Time Objective in seconds
+    timezone: str | None = None  # IANA timezone name
     start_planned: datetime | None = None
     end_planned: datetime | None = None
     start_scheduled: datetime | None = None
