@@ -18,3 +18,5 @@ poetry.lock
 
 .DS_Store
 mcp.json
+
+.coverage
