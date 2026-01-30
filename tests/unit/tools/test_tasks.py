@@ -296,3 +296,36 @@ async def test_task_error_handling(mock_client_manager):
         await tasks.start_task.fn("rb123", "invalid-task")
 
     assert exc_info.value.response.status_code == 404
+
+
+# --- delete_task tests ---
+
+
+@pytest.mark.asyncio
+async def test_delete_task(mock_client_manager):
+    """Test deleting a single task."""
+    mock_client_manager.request.return_value = {}
+
+    result = await tasks.delete_task.fn(runbook_id="rb123", task_id="task123")
+
+    mock_client_manager.request.assert_called_once_with("DELETE", "core/runbooks/rb123/tasks/task123")
+    assert result == {}
+
+
+@pytest.mark.asyncio
+async def test_delete_task_not_found(mock_client_manager):
+    """Test deleting a task that doesn't exist returns 404."""
+    import httpx
+
+    mock_response = AsyncMock()
+    mock_response.status_code = 404
+    mock_response.text = "Task not found"
+
+    mock_client_manager.request.side_effect = httpx.HTTPStatusError(
+        "Client error '404 Not Found'", request=AsyncMock(), response=mock_response
+    )
+
+    with pytest.raises(httpx.HTTPStatusError) as exc_info:
+        await tasks.delete_task.fn(runbook_id="rb123", task_id="nonexistent")
+
+    assert exc_info.value.response.status_code == 404
