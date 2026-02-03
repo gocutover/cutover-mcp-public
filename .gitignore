@@ -18,7 +18,5 @@ poetry.lock
 
 .DS_Store
 mcp.json
-.mcp.json
-tests/integration_test_pr1.py
 
 .coverage
