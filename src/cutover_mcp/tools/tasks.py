@@ -1,3 +1,5 @@
+from typing import Any
+
 from cutover_mcp.app import mcp
 from cutover_mcp.clients.api import client_mgr
 from cutover_mcp.models import TaskResponse, inject_return_schema
@@ -132,3 +134,16 @@ async def skip_task(runbook_id: str, task_id: str) -> TaskResponse:
     client = client_mgr.get_client()
     response = await client.request("PATCH", f"core/runbooks/{runbook_id}/tasks/{task_id}/skip")
     return TaskResponse(**response)
+
+
+@mcp.tool()
+async def delete_task(runbook_id: str, task_id: str) -> dict[str, Any]:
+    """
+    Delete a single task from a runbook.
+
+    :param runbook_id: The ID of the runbook containing the task.
+    :param task_id: The ID of the task to delete.
+    :return: An empty dictionary on successful deletion.
+    """
+    client = client_mgr.get_client()
+    return await client.request("DELETE", f"core/runbooks/{runbook_id}/tasks/{task_id}")
