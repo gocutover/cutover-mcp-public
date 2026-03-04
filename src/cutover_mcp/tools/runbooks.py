@@ -50,17 +50,19 @@ async def get_runbook_tasks(runbook_id: str) -> TaskListResponse:
     response = await client.request("GET", f"core/runbooks/{runbook_id}/tasks")
     return TaskListResponse(**response)
 
+
 @mcp.tool()
 async def update_runbook(
     runbook_id: str,
-    name: str = None,
-    description: str = None,
-    status: str = None,
-    is_template: bool = None,
-    rto: int = None,
-    timezone: str = None,
-    rto_end_task: str = None,
-    rto_start_task: str = None
+    name: str | None = None,
+    description: str | None = None,
+    status: str | None = None,
+    is_template: bool | None = None,
+    rto: int | None = None,
+    timezone: str | None = None,
+    rto_end_task: str | None = None,
+    rto_start_task: str | None = None,
+    custom_field_values: list[dict] | None = None,
 ) -> RunbookResponse:
     """
     Update a specific runbook's fields.
@@ -74,6 +76,9 @@ async def update_runbook(
     :param timezone: IANA Timezone name (optional).
     :param rto_start_task: ID of the start task for RTO/RTA feature (optional, relationship field).
     :param rto_end_task: ID of the end task for RTO/RTA feature (optional, relationship field).
+    :param custom_field_values: List of custom field values to update. Each item should be a dict with
+        either {"name": "Field Name", "value": "value"} or {"custom_field_id": "123", "value": "value"}.
+        Value can be a string or list of strings for multi-select fields.
     :return: A RunbookResponse object representing the updated runbook.
     """
     client = client_mgr.get_client()
@@ -90,6 +95,8 @@ async def update_runbook(
         attributes["rto"] = rto
     if timezone is not None:
         attributes["timezone"] = timezone
+    if custom_field_values is not None:
+        attributes["custom_field_values"] = custom_field_values
 
     relationships = {}
     if rto_start_task is not None:
@@ -110,18 +117,19 @@ async def update_runbook(
     response = await client.request("PATCH", f"core/runbooks/{runbook_id}", json_data=payload)
     return RunbookResponse(**response)
 
+
 @mcp.tool()
 async def create_runbook(
     workspace_id: str,
     name: str,
     description: str = "",
-    status: str = None,
-    is_template: bool = None,
-    rto: int = None,
-    timezone: str = None,
-    rto_end_task: str = None,
-    rto_start_task: str = None,
-    runbook_type_id: str = None
+    status: str | None = None,
+    is_template: bool | None = None,
+    rto: int | None = None,
+    timezone: str | None = None,
+    rto_end_task: str | None = None,
+    rto_start_task: str | None = None,
+    runbook_type_id: str | None = None,
 ) -> RunbookResponse:
     """
     Create a new runbook in a workspace.
@@ -182,7 +190,8 @@ async def manage_runbook(
     notify: bool | None = False,
 ) -> dict[str, Any]:
     """
-    Manage a specific runbook by performing an action (start, cancel, pause, resume). These are the only possible actions with this tool.
+    Manage a specific runbook by performing an action (start, cancel, pause, resume).
+    These are the only possible actions with this tool.
 
     :param runbook_id: The unique identifier for the runbook.
     :param action: The action to perform (start, cancel, pause, resume).
@@ -236,3 +245,34 @@ async def manage_runbook(
         payload["meta"] = {k: v for k, v in payload["meta"].items() if v is not None}
 
     return await client.request("PATCH", endpoint, json_data=payload)
+
+
+@mcp.tool()
+async def get_runbook_template_copies(
+    runbook_id: str,
+) -> RunbookListResponse:
+    """
+    Get all runbooks that were created from a specific runbook template.
+
+    :param runbook_id: The template runbook ID to find copies of.
+    :return: A RunbookListResponse containing list of runbooks created from this template.
+    """
+    client = client_mgr.get_client()
+    all_data: list[dict[str, Any]] = []
+
+    # Build initial path with source_runbook_id filter
+    path: str | None = f"core/runbooks?source_runbook_id={runbook_id}"
+
+    # Handle pagination - fetch all pages
+    while path:
+        response = await client.request("GET", path)
+        all_data.extend(response.get("data", []))
+        path = response.get("links", {}).get("next")
+
+    # Build final response with all collected data
+    final_response = {
+        "data": all_data,
+        "meta": {"page": {"number": 1, "total": len(all_data)}},
+        "links": {"self": f"core/runbooks?source_runbook_id={runbook_id}"},
+    }
+    return RunbookListResponse(**final_response)

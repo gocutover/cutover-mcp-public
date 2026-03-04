@@ -1,5 +1,6 @@
 from unittest.mock import AsyncMock
 
+import httpx
 import pytest
 
 from cutover_mcp.tools import runbooks
@@ -396,8 +397,6 @@ async def test_manage_runbook_invalid_action(mock_client_manager):
 @pytest.mark.asyncio
 async def test_runbook_not_found_error(mock_client_manager):
     """Test handling 404 error when runbook not found."""
-    import httpx
-
     # Set up mock to raise an error
     mock_response = AsyncMock()
     mock_response.status_code = 404
@@ -414,3 +413,121 @@ async def test_runbook_not_found_error(mock_client_manager):
         await runbooks.get_runbook_by_id.fn("invalid-rb")
 
     assert exc_info.value.response.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_update_runbook_with_custom_field_values(mock_client_manager):
+    """Test updating a runbook with custom field values."""
+    # Set up mock response
+    mock_client_manager.request.return_value = {
+        "data": {
+            "id": "rb123",
+            "type": "runbook",
+            "attributes": {
+                "name": "Runbook with Custom Fields",
+            },
+        }
+    }
+
+    custom_fields = [
+        {"name": "Environment", "value": "Production"},
+        {"custom_field_id": "cf789", "value": ["Region A", "Region B"]},
+    ]
+
+    # Call the function
+    await runbooks.update_runbook.fn(runbook_id="rb123", custom_field_values=custom_fields)
+
+    # Verify custom_field_values is included in the payload
+    mock_client_manager.request.assert_called_once_with(
+        "PATCH",
+        "core/runbooks/rb123",
+        json_data={
+            "data": {
+                "type": "runbook",
+                "id": "rb123",
+                "attributes": {"custom_field_values": custom_fields},
+            }
+        },
+    )
+
+
+@pytest.mark.asyncio
+async def test_get_runbook_template_copies(mock_client_manager):
+    """Test fetching runbooks created from a template."""
+    # Set up mock response
+    mock_client_manager.request.return_value = {
+        "data": [
+            {
+                "id": "rb-copy-1",
+                "type": "runbook",
+                "attributes": {"name": "Copy 1"},
+            },
+            {
+                "id": "rb-copy-2",
+                "type": "runbook",
+                "attributes": {"name": "Copy 2"},
+            },
+        ],
+        "links": {},
+    }
+
+    # Call the function
+    result = await runbooks.get_runbook_template_copies.fn(runbook_id="rb-template")
+
+    # Verify the API call
+    mock_client_manager.request.assert_called_once_with("GET", "core/runbooks?source_runbook_id=rb-template")
+
+    # Verify the result
+    assert len(result.data) == 2
+    assert result.data[0].id == "rb-copy-1"
+    assert result.data[1].attributes.name == "Copy 2"
+
+
+@pytest.mark.asyncio
+async def test_get_runbook_template_copies_with_pagination(mock_client_manager):
+    """Test that template copies fetches all pages."""
+    # Set up mock responses for 2 pages
+    mock_client_manager.request.side_effect = [
+        {
+            "data": [
+                {"id": "rb-copy-1", "type": "runbook", "attributes": {"name": "Copy 1"}},
+            ],
+            "links": {"next": "core/runbooks?source_runbook_id=rb-template&cursor=abc123"},
+        },
+        {
+            "data": [
+                {"id": "rb-copy-2", "type": "runbook", "attributes": {"name": "Copy 2"}},
+            ],
+            "links": {},
+        },
+    ]
+
+    # Call the function
+    result = await runbooks.get_runbook_template_copies.fn(runbook_id="rb-template")
+
+    # Verify both pages were fetched
+    assert mock_client_manager.request.call_count == 2
+    calls = mock_client_manager.request.call_args_list
+    assert calls[0][0] == ("GET", "core/runbooks?source_runbook_id=rb-template")
+    assert calls[1][0] == ("GET", "core/runbooks?source_runbook_id=rb-template&cursor=abc123")
+
+    # Verify all results were aggregated
+    assert len(result.data) == 2
+    assert result.data[0].id == "rb-copy-1"
+    assert result.data[1].id == "rb-copy-2"
+
+
+@pytest.mark.asyncio
+async def test_get_runbook_template_copies_empty(mock_client_manager):
+    """Test fetching template copies when none exist."""
+    # Set up mock response
+    mock_client_manager.request.return_value = {
+        "data": [],
+        "links": {},
+    }
+
+    # Call the function
+    result = await runbooks.get_runbook_template_copies.fn(runbook_id="rb-no-copies")
+
+    # Verify the result is empty
+    assert len(result.data) == 0

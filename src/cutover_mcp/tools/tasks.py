@@ -1,3 +1,5 @@
+from typing import Any
+
 from cutover_mcp.app import mcp
 from cutover_mcp.clients.api import client_mgr
 from cutover_mcp.models import TaskResponse, inject_return_schema
@@ -6,7 +8,13 @@ from cutover_mcp.models import TaskResponse, inject_return_schema
 @mcp.tool()
 @inject_return_schema
 async def add_task_to_runbook(
-    runbook_id: str, name: str, description: str = "", task_type_id: str | None = None, stream_id: str | None = None
+    runbook_id: str,
+    name: str,
+    description: str = "",
+    task_type_id: str | None = None,
+    stream_id: str | None = None,
+    predecessors: list[str] | None = None,
+    duration: int | None = None,
 ) -> TaskResponse:
     """
     Add a new task to an existing runbook.
@@ -16,6 +24,8 @@ async def add_task_to_runbook(
     :param description: An optional description for the task.
     :param task_type_id: The ID of the task type to associate with this task.
     :param stream_id: The ID of the stream to assign the task to (can be a substream).
+    :param predecessors: A list of task IDs that are predecessors to this task.
+    :param duration: Planned duration in seconds.
     :return: A TaskResponse object representing the newly created task.
 
     JSON Schema of Return Object:
@@ -25,7 +35,11 @@ async def add_task_to_runbook(
 
     """
     client = client_mgr.get_client()
-    payload = {"data": {"type": "task", "attributes": {"name": name, "description": description}}}
+    attributes: dict[str, str | int] = {"name": name, "description": description}
+    if duration is not None:
+        attributes["duration"] = duration
+
+    payload: dict = {"data": {"type": "task", "attributes": attributes}}
 
     relationships = {}
 
@@ -34,6 +48,10 @@ async def add_task_to_runbook(
 
     if stream_id is not None:
         relationships["stream"] = {"data": {"id": stream_id, "type": "stream"}}
+
+    if predecessors is not None:
+        predecessor_data = [{"id": pred_id, "type": "task"} for pred_id in predecessors]
+        relationships["predecessors"] = {"data": predecessor_data}
 
     if relationships:
         payload["data"]["relationships"] = relationships
@@ -51,9 +69,11 @@ async def update_runbook_task(
     predecessors: list[str] | None = None,
     task_type_id: str | None = None,
     stream_id: str | None = None,
+    duration: int | None = None,
+    custom_field_values: list[dict] | None = None,
 ) -> TaskResponse:
     """
-    Update an existing task in a runbook (including dependencies, description, stream, etc.).
+    Update an existing task in a runbook (including dependencies, description, stream, duration, etc.).
 
     :param runbook_id: The ID of the runbook containing the task.
     :param task_id: The ID of the task to update.
@@ -62,16 +82,24 @@ async def update_runbook_task(
     :param predecessors: A list of task IDs that are predecessors to this task.
     :param task_type_id: The ID of the task type to associate with this task.
     :param stream_id: The ID of the stream to assign the task to (can be a substream).
+    :param duration: Planned duration in seconds.
+    :param custom_field_values: List of custom field values to update. Each item should be a dict with either
+        {"name": "Field Name", "value": "value"} or {"custom_field_id": "123", "value": "value"}.
+        Value can be a string or list of strings for multi-select fields.
     :return: A TaskResponse object representing the updated task.
     """
     client = client_mgr.get_client()
-    attributes = {}
+    attributes: dict = {}
     if name is not None:
         attributes["name"] = name
     if description is not None:
         attributes["description"] = description
+    if duration is not None:
+        attributes["duration"] = duration
+    if custom_field_values is not None:
+        attributes["custom_field_values"] = custom_field_values
 
-    payload = {"data": {"type": "task", "id": task_id, "attributes": attributes}}
+    payload: dict = {"data": {"type": "task", "id": task_id, "attributes": attributes}}
 
     relationships = {}
 
@@ -132,3 +160,16 @@ async def skip_task(runbook_id: str, task_id: str) -> TaskResponse:
     client = client_mgr.get_client()
     response = await client.request("PATCH", f"core/runbooks/{runbook_id}/tasks/{task_id}/skip")
     return TaskResponse(**response)
+
+
+@mcp.tool()
+async def delete_task(runbook_id: str, task_id: str) -> dict[str, Any]:
+    """
+    Delete a single task from a runbook.
+
+    :param runbook_id: The ID of the runbook containing the task.
+    :param task_id: The ID of the task to delete.
+    :return: An empty dictionary on successful deletion.
+    """
+    client = client_mgr.get_client()
+    return await client.request("DELETE", f"core/runbooks/{runbook_id}/tasks/{task_id}")
