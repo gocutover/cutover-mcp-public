@@ -53,7 +53,7 @@ class APIClient:
     ) -> dict[str, Any]:
         """Make an HTTP request with opinionated error handling."""
         client = await self._get_client()
-        url = f"{self.base_url}/{endpoint.lstrip('/')}"
+        url = endpoint if endpoint.startswith(("http://", "https://")) else f"{self.base_url}/{endpoint.lstrip('/')}"
 
         for attempt in range(3):  # Retry logic
             try:
@@ -67,7 +67,11 @@ class APIClient:
                 # Return empty dict for 204 No Content responses
                 return response.json() if response.status_code != 204 else {}
             except (httpx.RequestError, httpx.HTTPStatusError) as e:
-                if attempt == 2 or (isinstance(e, httpx.HTTPStatusError) and 400 <= e.response.status_code < 500):
+                if attempt == 2 or (
+                    isinstance(e, httpx.HTTPStatusError)
+                    and 400 <= e.response.status_code < 500
+                    and e.response.status_code != 429
+                ):
                     logger.error("API request failed for %s: %s", url, e)
                     raise
                 delay = 2**attempt

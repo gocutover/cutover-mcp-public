@@ -23,7 +23,7 @@ jobs:
             -v ${{ github.workspace }}:/app \
             -w /app \
             cutover-mcp-test \
-            bash -c "uv pip install --system -e '.[dev]' && pytest --cov=cutover_mcp --cov-report=xml --cov-report=html --cov-report=term-missing -v"
+            bash -c "uv sync --extra dev && uv run pytest --cov=cutover_mcp --cov-report=xml --cov-report=html --cov-report=term-missing -v"
 
       - name: Upload coverage HTML report
         uses: actions/upload-artifact@v4
