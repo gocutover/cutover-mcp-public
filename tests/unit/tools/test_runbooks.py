@@ -68,6 +68,66 @@ async def test_list_runbooks(mock_client_manager):
 
 
 @pytest.mark.asyncio
+async def test_list_runbooks_with_filters(mock_client_manager):
+    """Test listing runbooks with source_runbook_id and folder_id filters."""
+    mock_client_manager.request.return_value = {
+        "data": [{"id": "rb1", "type": "runbook", "attributes": {"name": "Runbook 1"}}],
+        "meta": {"page": {"number": 1}},
+        "links": {},
+    }
+
+    result = await runbooks.list_runbooks.fn("ws123", source_runbook_id="tmpl1", folder_id="f42")
+
+    mock_client_manager.request.assert_called_once_with(
+        "GET",
+        "core/runbooks",
+        params={"workspace_id": "ws123", "source_runbook_id": "tmpl1", "folder_id": "f42"},
+    )
+    assert len(result.data) == 1
+
+
+@pytest.mark.asyncio
+async def test_list_runbooks_with_is_template_false(mock_client_manager):
+    """Test that is_template=False is serialized as lowercase 'false'."""
+    mock_client_manager.request.return_value = {
+        "data": [],
+        "meta": {"page": {"number": 1}},
+        "links": {},
+    }
+
+    await runbooks.list_runbooks.fn("ws123", is_template=False)
+
+    mock_client_manager.request.assert_called_once_with(
+        "GET",
+        "core/runbooks",
+        params={"workspace_id": "ws123", "is_template": "false"},
+    )
+
+
+@pytest.mark.asyncio
+async def test_list_runbooks_with_pagination(mock_client_manager):
+    """Test that list_runbooks fetches all pages."""
+    mock_client_manager.request.side_effect = [
+        {
+            "data": [{"id": "rb1", "type": "runbook", "attributes": {"name": "Runbook 1"}}],
+            "links": {"next": "core/runbooks?workspace_id=ws123&cursor=abc"},
+        },
+        {
+            "data": [{"id": "rb2", "type": "runbook", "attributes": {"name": "Runbook 2"}}],
+            "links": {},
+        },
+    ]
+
+    result = await runbooks.list_runbooks.fn("ws123")
+
+    assert mock_client_manager.request.call_count == 2
+    calls = mock_client_manager.request.call_args_list
+    assert calls[0] == (("GET", "core/runbooks"), {"params": {"workspace_id": "ws123"}})
+    assert calls[1] == (("GET", "core/runbooks?workspace_id=ws123&cursor=abc"), {"params": None})
+    assert len(result.data) == 2
+
+
+@pytest.mark.asyncio
 async def test_get_runbook_tasks(mock_client_manager):
     """Test fetching tasks for a runbook."""
     # Set up mock response
@@ -454,80 +514,63 @@ async def test_update_runbook_with_custom_field_values(mock_client_manager):
 @pytest.mark.asyncio
 async def test_get_runbook_template_copies(mock_client_manager):
     """Test fetching runbooks created from a template."""
-    # Set up mock response
     mock_client_manager.request.return_value = {
         "data": [
-            {
-                "id": "rb-copy-1",
-                "type": "runbook",
-                "attributes": {"name": "Copy 1"},
-            },
-            {
-                "id": "rb-copy-2",
-                "type": "runbook",
-                "attributes": {"name": "Copy 2"},
-            },
+            {"id": "rb-copy-1", "type": "runbook", "attributes": {"name": "Copy 1"}},
+            {"id": "rb-copy-2", "type": "runbook", "attributes": {"name": "Copy 2"}},
         ],
         "links": {},
     }
 
-    # Call the function
     result = await runbooks.get_runbook_template_copies.fn(runbook_id="rb-template")
 
-    # Verify the API call
     mock_client_manager.request.assert_called_once_with("GET", "core/runbooks?source_runbook_id=rb-template")
 
-    # Verify the result
     assert len(result.data) == 2
     assert result.data[0].id == "rb-copy-1"
     assert result.data[1].attributes.name == "Copy 2"
+    assert result.meta.page.total == 2
+    assert result.links.self == "core/runbooks?source_runbook_id=rb-template"
 
 
 @pytest.mark.asyncio
 async def test_get_runbook_template_copies_with_pagination(mock_client_manager):
-    """Test that template copies fetches all pages."""
-    # Set up mock responses for 2 pages
+    """Test that template copies fetches all pages and meta.total reflects all collected items."""
     mock_client_manager.request.side_effect = [
         {
-            "data": [
-                {"id": "rb-copy-1", "type": "runbook", "attributes": {"name": "Copy 1"}},
-            ],
+            "data": [{"id": "rb-copy-1", "type": "runbook", "attributes": {"name": "Copy 1"}}],
             "links": {"next": "core/runbooks?source_runbook_id=rb-template&cursor=abc123"},
         },
         {
-            "data": [
-                {"id": "rb-copy-2", "type": "runbook", "attributes": {"name": "Copy 2"}},
-            ],
+            "data": [{"id": "rb-copy-2", "type": "runbook", "attributes": {"name": "Copy 2"}}],
             "links": {},
         },
     ]
 
-    # Call the function
     result = await runbooks.get_runbook_template_copies.fn(runbook_id="rb-template")
 
-    # Verify both pages were fetched
     assert mock_client_manager.request.call_count == 2
     calls = mock_client_manager.request.call_args_list
     assert calls[0][0] == ("GET", "core/runbooks?source_runbook_id=rb-template")
     assert calls[1][0] == ("GET", "core/runbooks?source_runbook_id=rb-template&cursor=abc123")
 
-    # Verify all results were aggregated
     assert len(result.data) == 2
     assert result.data[0].id == "rb-copy-1"
     assert result.data[1].id == "rb-copy-2"
+    assert result.meta.page.total == 2
+    assert result.links.self == "core/runbooks?source_runbook_id=rb-template"
 
 
 @pytest.mark.asyncio
 async def test_get_runbook_template_copies_empty(mock_client_manager):
     """Test fetching template copies when none exist."""
-    # Set up mock response
     mock_client_manager.request.return_value = {
         "data": [],
         "links": {},
     }
 
-    # Call the function
     result = await runbooks.get_runbook_template_copies.fn(runbook_id="rb-no-copies")
 
-    # Verify the result is empty
     assert len(result.data) == 0
+    assert result.meta.page.total == 0
+    assert result.links.self == "core/runbooks?source_runbook_id=rb-no-copies"

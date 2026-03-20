@@ -3,6 +3,7 @@ from typing import Any
 from cutover_mcp.app import mcp
 from cutover_mcp.clients.api import client_mgr
 from cutover_mcp.models import RunbookListResponse, RunbookResponse, TaskListResponse, inject_return_schema
+from urllib.parse import urlencode
 
 
 @mcp.tool()
@@ -25,17 +26,61 @@ async def get_runbook_by_id(runbook_id: str) -> RunbookResponse:
 
 
 @mcp.tool()
-async def list_runbooks(workspace_id: str) -> RunbookListResponse:
+async def list_runbooks(
+    workspace_id: str,
+    is_template: bool | None = None,
+    archived: bool | None = None,
+    source_runbook_id: str | None = None,
+    folder_id: str | None = None,
+    extra_params: dict[str, Any] | None = None,
+) -> RunbookListResponse:
     """
     List all runbooks in a specific workspace.
 
     :param workspace_id: The unique identifier for the workspace.
+    :param is_template: Filter by template status. Pass false to exclude templates, true to show only templates.
+    :param archived: Filter by archived status. Pass false to exclude archived runbooks, true to show only archived.
+    :param source_runbook_id: Filter to only runbooks created from this template ID.
+    :param folder_id: Filter to only runbooks in this folder ID.
+    :param extra_params: Additional query parameters to pass to the API (e.g. {"stage": "active"}).
     :return: A RunbookListResponse object containing a list of runbooks.
     """
     client = client_mgr.get_client()
-    params = {"workspace_id": workspace_id}
-    response = await client.request("GET", "core/runbooks", params=params)
-    return RunbookListResponse(**response)
+
+    path: str | None = "core/runbooks"
+    params: dict[str, Any] = {"workspace_id": workspace_id}
+    if is_template is not None:
+        params["is_template"] = str(is_template).lower()
+    if archived is not None:
+        params["archived"] = str(archived).lower()
+    if source_runbook_id is not None:
+        params["source_runbook_id"] = source_runbook_id
+    if folder_id is not None:
+        params["folder_id"] = folder_id
+    if extra_params:
+        for key, value in extra_params.items():
+            if key not in params:
+                params[key] = value
+
+    initial_params = dict(params)
+    all_data: list[dict[str, Any]] = []
+    last_response: dict[str, Any] = {}
+
+    while path:
+        response = await client.request("GET", path, params=params)
+        params = None
+        all_data.extend(response.get("data", []))
+        last_response = response
+        path = response.get("links", {}).get("next")
+
+    return RunbookListResponse(
+        **{
+            "data": all_data,
+            "included": last_response.get("included", []),
+            "meta": last_response.get("meta", {"page": {"number": 1, "total": len(all_data)}}),
+            "links": last_response.get("links", {"self": f"core/runbooks?{urlencode(initial_params)}"}),
+        }
+    )
 
 
 @mcp.tool()
