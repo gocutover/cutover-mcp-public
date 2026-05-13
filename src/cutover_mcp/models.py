@@ -109,6 +109,11 @@ class TaskTypeIdentifier(JsonApiIdentifier):
     type: Literal["task_type"]
 
 
+class Assignee(BaseModel):
+    id: str
+    type: Literal["user", "runbook_team"]
+
+
 class RunbookVersionIdentifier(JsonApiIdentifier):
     type: Literal["runbook_version"]
 
@@ -150,7 +155,7 @@ class CustomFieldValue(BaseModel):
 
 
 class TaskAttributes(BaseModel):
-    name: str
+    name: str | None = None
     description: str | None = None
     duration: int | None = None
     stage: Literal["not_startable", "startable", "in_progress", "complete"] | None = None
@@ -160,6 +165,8 @@ class TaskAttributes(BaseModel):
     end_actual: datetime | None = None
     start_fixed: datetime | None = None
     end_fixed: datetime | None = None
+    start_display: datetime | None = None
+    end_display: datetime | None = None
     created_at: datetime | None = None
     updated_at: datetime | None = None
     custom_field_values: list[CustomFieldValue] | None = Field(None, alias="custom_field_values")
@@ -221,7 +228,37 @@ StreamResponse = JsonApiSingleResponse[StreamResource]
 StreamListResponse = JsonApiListResponse[StreamResource]
 
 
-# --- 6. Runbook Models ---
+# --- 6. Runbook Type Models ---
+
+
+class RunbookTypeAttributes(BaseModel):
+    name: str
+    key: str | None = None
+    description: str | None = None
+    archived: bool | None = None
+    default: bool | None = None
+    disabled: bool | None = None
+    dynamic: bool | None = None
+    enable_rto: bool | None = None
+    global_: bool | None = Field(None, alias="global")
+    incident: bool | None = None
+    restrict_create_to_templates: bool | None = None
+    ai_create_enabled: bool | None = None
+
+
+class RunbookTypeRelationships(BaseModel):
+    workspace: Relationship[JsonApiIdentifier] | None = None
+
+
+class RunbookTypeResource(JsonApiObject[RunbookTypeAttributes, RunbookTypeRelationships]):
+    type: Literal["runbook_type"]
+
+
+# Final Runbook Type Response Models
+RunbookTypeListResponse = JsonApiListResponse[RunbookTypeResource]
+
+
+# --- 7. Runbook Models ---
 
 
 class RunbookAttributes(BaseModel):
@@ -260,6 +297,34 @@ class RunbookResource(JsonApiObject[RunbookAttributes, RunbookRelationships]):
 # Final Runbook Response Models
 RunbookResponse = JsonApiSingleResponse[RunbookResource]
 RunbookListResponse = JsonApiListResponse[RunbookResource]
+
+
+# --- 7. Folder Models ---
+
+
+class FolderIdentifier(JsonApiIdentifier):
+    type: Literal["folder"]
+
+
+class FolderAttributes(BaseModel):
+    name: str
+    description: str | None = None
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
+
+
+class FolderRelationships(BaseModel):
+    parent: Relationship[FolderIdentifier] | None = None
+    workspace: Relationship[JsonApiIdentifier] | None = None
+
+
+class FolderResource(JsonApiObject[FolderAttributes, FolderRelationships]):
+    type: Literal["folder"]
+
+
+# Final Folder Response Models
+FolderResponse = JsonApiSingleResponse[FolderResource]
+FolderListResponse = JsonApiListResponse[FolderResource]
 
 
 def generate_compact_schema_text(model: type[BaseModel], indent: int = 0, visited: set | None = None) -> str:

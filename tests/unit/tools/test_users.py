@@ -122,3 +122,40 @@ async def test_get_user_error_handling(mock_client_manager):
         await users.get_user.fn(user_id="nonexistent")
 
     assert exc_info.value.response.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_search_users_returns_matches(mock_client_manager):
+    """Test searching users by name returns matching results."""
+    mock_client_manager.request.return_value = {
+        "data": [
+            {
+                "id": "12",
+                "type": "user",
+                "attributes": {"first_name": "Alice", "last_name": "Smith", "email": "alice.smith@example.com"},
+            },
+            {
+                "id": "34",
+                "type": "user",
+                "attributes": {"first_name": "Alice", "last_name": "Jones", "email": "alice.jones@example.com"},
+            },
+        ]
+    }
+
+    result = await users.search_users.fn(query="Alice")
+
+    mock_client_manager.request.assert_called_once_with("GET", "core/users", params={"query": "Alice"})
+    assert len(result) == 2
+    assert result[0] == {"id": "12", "email": "alice.smith@example.com", "full_name": "Alice Smith"}
+    assert result[1] == {"id": "34", "email": "alice.jones@example.com", "full_name": "Alice Jones"}
+
+
+@pytest.mark.asyncio
+async def test_search_users_empty_results(mock_client_manager):
+    """Test searching users returns empty list when no matches."""
+    mock_client_manager.request.return_value = {"data": []}
+
+    result = await users.search_users.fn(query="nobody")
+
+    mock_client_manager.request.assert_called_once_with("GET", "core/users", params={"query": "nobody"})
+    assert result == []

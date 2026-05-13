@@ -129,8 +129,7 @@ async def test_list_runbooks_with_pagination(mock_client_manager):
 
 @pytest.mark.asyncio
 async def test_get_runbook_tasks(mock_client_manager):
-    """Test fetching tasks for a runbook."""
-    # Set up mock response
+    """Test fetching tasks for a runbook with no filters."""
     mock_client_manager.request.return_value = {
         "data": [
             {
@@ -148,16 +147,211 @@ async def test_get_runbook_tasks(mock_client_manager):
         "links": {},
     }
 
-    # Call the function
     result = await runbooks.get_runbook_tasks.fn("rb123")
 
-    # Verify the API call
-    mock_client_manager.request.assert_called_once_with("GET", "core/runbooks/rb123/tasks")
+    mock_client_manager.request.assert_called_once_with("GET", "core/runbooks/rb123/tasks", params={})
 
-    # Verify the result
     assert len(result.data) == 2
     assert result.data[0].attributes.name == "Task 1"
     assert result.data[1].attributes.stage == "complete"
+
+
+@pytest.mark.asyncio
+async def test_get_runbook_tasks_with_stage_filter(mock_client_manager):
+    """Test fetching tasks filtered by stage."""
+    mock_client_manager.request.return_value = {
+        "data": [{"id": "task1", "type": "task", "attributes": {"name": "Task 1", "stage": "in_progress"}}],
+        "meta": {"page": {"number": 1}},
+        "links": {},
+    }
+
+    result = await runbooks.get_runbook_tasks.fn("rb123", stage=["in_progress"])
+
+    mock_client_manager.request.assert_called_once_with(
+        "GET", "core/runbooks/rb123/tasks", params={"stage": "in_progress"}
+    )
+    assert len(result.data) == 1
+    assert result.data[0].attributes.stage == "in_progress"
+
+
+@pytest.mark.asyncio
+async def test_get_runbook_tasks_with_multiple_filters(mock_client_manager):
+    """Test fetching tasks with multiple filters combined."""
+    mock_client_manager.request.return_value = {
+        "data": [{"id": "task1", "type": "task", "attributes": {"name": "Deploy"}}],
+        "meta": {"page": {"number": 1}},
+        "links": {},
+    }
+
+    result = await runbooks.get_runbook_tasks.fn(
+        "rb123",
+        stage=["startable", "in_progress"],
+        stream_id=["stream1"],
+        search_term="Deploy",
+    )
+
+    mock_client_manager.request.assert_called_once_with(
+        "GET",
+        "core/runbooks/rb123/tasks",
+        params={"stage": "startable,in_progress", "stream_id": "stream1", "search_term": "Deploy"},
+    )
+    assert result.data[0].attributes.name == "Deploy"
+
+
+@pytest.mark.asyncio
+async def test_get_runbook_tasks_with_forecast(mock_client_manager):
+    """Test fetching tasks in forecast mode."""
+    mock_client_manager.request.return_value = {
+        "data": [
+            {
+                "id": "task1",
+                "type": "task",
+                "attributes": {
+                    "name": "Task 1",
+                    "start_display": "2026-04-01T10:00:00Z",
+                    "end_display": "2026-04-01T11:00:00Z",
+                },
+            }
+        ],
+        "meta": {"page": {"number": 1}},
+        "links": {},
+    }
+
+    result = await runbooks.get_runbook_tasks.fn("rb123", forecast=True)
+
+    mock_client_manager.request.assert_called_once_with("GET", "core/runbooks/rb123/tasks", params={"forecast": "true"})
+    assert len(result.data) == 1
+    assert result.data[0].attributes.start_display is not None
+    assert result.data[0].attributes.end_display is not None
+
+
+@pytest.mark.asyncio
+async def test_get_runbook_tasks_pagination(mock_client_manager):
+    """Test that get_runbook_tasks follows pagination and returns all tasks."""
+    mock_client_manager.request.side_effect = [
+        {
+            "data": [{"id": "task1", "type": "task", "attributes": {"name": "Task 1"}}],
+            "meta": {"page": {"number": 1}},
+            "links": {"next": "core/runbooks/rb123/tasks?page[number]=2"},
+        },
+        {
+            "data": [{"id": "task2", "type": "task", "attributes": {"name": "Task 2"}}],
+            "meta": {"page": {"number": 2}},
+            "links": {},
+        },
+    ]
+
+    result = await runbooks.get_runbook_tasks.fn("rb123")
+
+    assert mock_client_manager.request.call_count == 2
+    calls = mock_client_manager.request.call_args_list
+    assert calls[0] == (("GET", "core/runbooks/rb123/tasks"), {"params": {}})
+    assert calls[1] == (("GET", "core/runbooks/rb123/tasks?page[number]=2"), {"params": None})
+    assert len(result.data) == 2
+    assert result.data[0].id == "task1"
+    assert result.data[1].id == "task2"
+
+
+@pytest.mark.asyncio
+async def test_get_runbook_tasks_with_fields_task(mock_client_manager):
+    """Test that fields_task list is joined into a comma-separated string for the API."""
+    mock_client_manager.request.return_value = {
+        "data": [{"id": "1", "type": "task", "attributes": {"name": "Task 1", "stage": "startable"}}],
+        "meta": {"page": {"number": 1}},
+        "links": {},
+    }
+
+    await runbooks.get_runbook_tasks.fn("rb123", fields_task=["name", "stage", "start_planned"])
+
+    mock_client_manager.request.assert_called_once_with(
+        "GET",
+        "core/runbooks/rb123/tasks",
+        params={"fields[task]": "name,stage,start_planned"},
+    )
+
+
+@pytest.mark.asyncio
+async def test_get_runbook_tasks_with_completion_type_level_has_comments_and_sort(mock_client_manager):
+    """Test filtering by completion_type, level, has_comments, and sort order."""
+    mock_client_manager.request.return_value = {
+        "data": [],
+        "meta": {"page": {"number": 1}},
+        "links": {},
+    }
+
+    await runbooks.get_runbook_tasks.fn(
+        "rb123",
+        completion_type="complete_normal",
+        level="1",
+        has_comments=True,
+        sort="-start_planned",
+    )
+
+    mock_client_manager.request.assert_called_once_with(
+        "GET",
+        "core/runbooks/rb123/tasks",
+        params={
+            "completion_type": "complete_normal",
+            "level": "1",
+            "has_comments": "true",
+            "sort": "-start_planned",
+        },
+    )
+
+
+@pytest.mark.asyncio
+async def test_get_runbook_tasks_with_task_type_team_user_and_source_filters(mock_client_manager):
+    """Test filtering by task_type_id, runbook_team_id, user_id, and source_runbook_id."""
+    mock_client_manager.request.return_value = {
+        "data": [],
+        "meta": {"page": {"number": 1}},
+        "links": {},
+    }
+
+    await runbooks.get_runbook_tasks.fn(
+        "rb123",
+        task_type_id=["tt1", "tt2"],
+        runbook_team_id=["team1"],
+        user_id=["u1", "u2"],
+        source_runbook_id=["rb-template"],
+    )
+
+    mock_client_manager.request.assert_called_once_with(
+        "GET",
+        "core/runbooks/rb123/tasks",
+        params={
+            "task_type_id": "tt1,tt2",
+            "runbook_team_id": "team1",
+            "user_id": "u1,u2",
+            "source_runbook_id": "rb-template",
+        },
+    )
+
+
+@pytest.mark.asyncio
+async def test_get_runbook_tasks_forecast_does_not_paginate(mock_client_manager):
+    """Test that forecast mode makes exactly one request regardless of links."""
+    mock_client_manager.request.return_value = {
+        "data": [
+            {
+                "id": "1",
+                "type": "task",
+                "attributes": {"start_display": "2026-04-01T10:00:00Z", "end_display": "2026-04-01T11:00:00Z"},
+            },
+            {
+                "id": "2",
+                "type": "task",
+                "attributes": {"start_display": "2026-04-01T11:00:00Z", "end_display": "2026-04-01T12:00:00Z"},
+            },
+        ],
+        "meta": {"page": {"number": 1, "total": None}},
+        "links": {"next": "core/runbooks/rb123/tasks?page[number]=2"},
+    }
+
+    result = await runbooks.get_runbook_tasks.fn("rb123", forecast=True)
+
+    mock_client_manager.request.assert_called_once()
+    assert len(result.data) == 2
 
 
 @pytest.mark.asyncio
@@ -340,6 +534,45 @@ async def test_create_runbook_full_params(mock_client_manager):
     assert result.data.attributes.is_template is True
     assert result.data.attributes.status == "amber"
     assert result.data.attributes.timezone == "UTC"
+
+
+@pytest.mark.asyncio
+async def test_create_runbook_with_template_type(mock_client_manager):
+    """Test creating a runbook with template_type set to default."""
+    mock_client_manager.request.return_value = {
+        "data": {
+            "id": "tmpl-rb",
+            "type": "runbook",
+            "attributes": {
+                "name": "My Template",
+                "description": "",
+                "template_type": "default",
+                "is_template": True,
+            },
+            "relationships": {"workspace": {"data": {"id": "ws123", "type": "workspace"}}},
+        }
+    }
+
+    result = await runbooks.create_runbook.fn(
+        workspace_id="ws123",
+        name="My Template",
+        template_type="default",
+    )
+
+    mock_client_manager.request.assert_called_once_with(
+        "POST",
+        "core/runbooks",
+        json_data={
+            "data": {
+                "type": "runbook",
+                "attributes": {"name": "My Template", "description": "", "template_type": "default"},
+                "relationships": {"workspace": {"data": {"type": "workspace", "id": "ws123"}}},
+            }
+        },
+    )
+
+    assert result.data.attributes.template_type == "default"
+    assert result.data.attributes.is_template is True
 
 
 @pytest.mark.asyncio

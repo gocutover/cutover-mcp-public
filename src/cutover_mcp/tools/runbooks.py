@@ -84,16 +84,115 @@ async def list_runbooks(
 
 
 @mcp.tool()
-async def get_runbook_tasks(runbook_id: str) -> TaskListResponse:
+@inject_return_schema
+async def get_runbook_tasks(
+    runbook_id: str,
+    forecast: bool = False,
+    fields_task: list[str] | None = None,
+    stage: list[str] | None = None,
+    stream_id: list[str] | None = None,
+    completion_type: str | None = None,
+    task_type_id: list[str] | None = None,
+    level: str | None = None,
+    search_term: str | None = None,
+    has_comments: bool | None = None,
+    runbook_team_id: list[str] | None = None,
+    user_id: list[str] | None = None,
+    source_runbook_id: list[str] | None = None,
+    sort: str | None = None,
+) -> TaskListResponse:
     """
-    Fetch all tasks for a specific runbook.
+    Fetch tasks for a specific runbook, with optional filtering and sorting.
+
+    This endpoint has two modes:
+    - Conventional mode: supports filtering, pagination, and sorting.
+    - Forecast mode (forecast=true): returns ALL tasks in a single response regardless of
+      pagination or filters, and includes computed timing fields start_display and end_display,
+      plus predecessor/successor graph relationships. Use for timeline or dependency views.
 
     :param runbook_id: The unique identifier for the runbook.
+    :param forecast: When true, returns all tasks with computed forecast fields (start_display,
+        end_display) and graph info (predecessors, successors). Overrides pagination and filters.
+    :param fields_task: Specific task fields to return (maps to fields[task]). Reduces payload
+        size. Attributes: created_at, comments_count, completion_type, custom_field_values,
+        description, disable_notify, duration, elapsed_duration, is_late, end_actual,
+        end_display (forecast only), end_fixed, end_planned, end_requirements, level, message,
+        name, start_actual, start_display (forecast only), start_requirements, start_fixed,
+        start_planned, start_ready, updated_at, stage. Relationships: predecessors,
+        source_runbook, source_task, successors, stream, task_type.
+    :param stage: Filter by task stage(s). Allowed: default, startable, in_progress, complete.
+    :param stream_id: Filter to tasks in these stream ID(s).
+    :param completion_type: Filter by completion type. Allowed: complete_normal,
+        complete_skipped, complete_abandoned, complete_auto.
+    :param task_type_id: Filter to tasks of these task type ID(s).
+    :param level: Filter by task level.
+    :param search_term: Filter tasks by search term matched against task name.
+    :param has_comments: When true, return only tasks that have comments.
+    :param runbook_team_id: Filter to tasks assigned to these runbook team ID(s).
+    :param user_id: Filter to tasks assigned to these user ID(s).
+    :param source_runbook_id: Filter to tasks originating from these source runbook ID(s).
+    :param sort: Sort order. Example: start_planned or -start_planned (descending).
     :return: A TaskListResponse object containing a list of tasks for the specified runbook.
+
+    JSON Schema of Return Object:
+    ```json
+    {return_schema}
+    ```
+
     """
     client = client_mgr.get_client()
-    response = await client.request("GET", f"core/runbooks/{runbook_id}/tasks")
-    return TaskListResponse(**response)
+
+    params: dict[str, Any] = {}
+    if forecast:
+        params["forecast"] = "true"
+    if fields_task is not None:
+        params["fields[task]"] = ",".join(fields_task)
+    if stage:
+        params["stage"] = ",".join(stage)
+    if stream_id:
+        params["stream_id"] = ",".join(stream_id)
+    if completion_type is not None:
+        params["completion_type"] = completion_type
+    if task_type_id:
+        params["task_type_id"] = ",".join(task_type_id)
+    if level is not None:
+        params["level"] = level
+    if search_term:
+        params["search_term"] = search_term
+    if has_comments is not None:
+        params["has_comments"] = str(has_comments).lower()
+    if runbook_team_id:
+        params["runbook_team_id"] = ",".join(runbook_team_id)
+    if user_id:
+        params["user_id"] = ",".join(user_id)
+    if source_runbook_id:
+        params["source_runbook_id"] = ",".join(source_runbook_id)
+    if sort is not None:
+        params["sort"] = sort
+
+    # Forecast mode returns all tasks in a single response — no pagination needed
+    if forecast:
+        response = await client.request("GET", f"core/runbooks/{runbook_id}/tasks", params=params or None)
+        return TaskListResponse(**response)
+
+    path: str | None = f"core/runbooks/{runbook_id}/tasks"
+    all_data: list[dict[str, Any]] = []
+    last_response: dict[str, Any] = {}
+
+    while path:
+        response = await client.request("GET", path, params=params)
+        params = None
+        all_data.extend(response.get("data", []))
+        last_response = response
+        path = response.get("links", {}).get("next")
+
+    return TaskListResponse(
+        **{
+            "data": all_data,
+            "meta": last_response.get("meta", {"page": {"number": 1, "total": len(all_data)}}),
+            "links": last_response.get("links", {"self": f"core/runbooks/{runbook_id}/tasks"}),
+        }
+    )
 
 
 @mcp.tool()
@@ -170,6 +269,7 @@ async def create_runbook(
     description: str = "",
     status: str | None = None,
     is_template: bool | None = None,
+    template_type: str | None = None,
     rto: int | None = None,
     timezone: str | None = None,
     rto_end_task: str | None = None,
@@ -184,6 +284,7 @@ async def create_runbook(
     :param description: An optional description for the runbook.
     :param status: The new RAG status for the runbook (Allowed: off, red, amber, green).
     :param is_template: Whether the runbook is a template (optional, true/false).
+    :param template_type: The template type of the runbook. Allowed values: off, default, snippet.
     :param rto: Recovery Time Objective (RTO) in seconds (optional).
     :param timezone: IANA Timezone name (optional).
     :param runbook_type_id: The ID of the runbook type to associate with this runbook (optional, relationship field).
@@ -197,6 +298,8 @@ async def create_runbook(
         attributes["status"] = status
     if is_template is not None:
         attributes["is_template"] = is_template
+    if template_type is not None:
+        attributes["template_type"] = template_type
     if rto is not None:
         attributes["rto"] = rto
     if timezone is not None:

@@ -2,7 +2,7 @@ from typing import Any
 
 from cutover_mcp.app import mcp
 from cutover_mcp.clients.api import client_mgr
-from cutover_mcp.models import TaskResponse, inject_return_schema
+from cutover_mcp.models import Assignee, TaskResponse, inject_return_schema
 
 
 @mcp.tool()
@@ -71,6 +71,8 @@ async def update_runbook_task(
     stream_id: str | None = None,
     duration: int | None = None,
     custom_field_values: list[dict] | None = None,
+    assignees: list[Assignee] | None = None,
+    delete_excluded_assignees: bool = False,
 ) -> TaskResponse:
     """
     Update an existing task in a runbook (including dependencies, description, stream, duration, etc.).
@@ -86,6 +88,12 @@ async def update_runbook_task(
     :param custom_field_values: List of custom field values to update. Each item should be a dict with either
         {"name": "Field Name", "value": "value"} or {"custom_field_id": "123", "value": "value"}.
         Value can be a string or list of strings for multi-select fields.
+    :param assignees: List of assignees to add to the task. Each item must have an "id" and a "type" of
+        either "user" or "runbook_team". Only users and teams that are already participants on the runbook
+        can be assigned; non-participants are silently ignored by the API. By default these are added without
+        removing existing assignees; set delete_excluded_assignees=True to replace the full list instead.
+    :param delete_excluded_assignees: When False (default), adds the given assignees without removing existing
+        ones. When True, replaces the full assignee list with only the assignees provided.
     :return: A TaskResponse object representing the updated task.
     """
     client = client_mgr.get_client()
@@ -112,6 +120,10 @@ async def update_runbook_task(
 
     if stream_id is not None:
         relationships["stream"] = {"data": {"id": stream_id, "type": "stream"}}
+
+    if assignees is not None:
+        relationships["assignees"] = {"data": [a.model_dump() for a in assignees]}
+        payload["meta"] = {"delete_excluded_assignees": delete_excluded_assignees}
 
     if relationships:
         payload["data"]["relationships"] = relationships

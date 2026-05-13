@@ -13,6 +13,8 @@ from cutover_mcp.tools import (  # noqa: F401
     action_log,
     activities,
     custom_fields,
+    runbook_types,
+    folders,
     runbooks,
     streams,
     task_types,

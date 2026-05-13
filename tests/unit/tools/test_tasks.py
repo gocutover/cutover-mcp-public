@@ -3,6 +3,7 @@ from unittest.mock import AsyncMock
 import httpx
 import pytest
 
+from cutover_mcp.models import Assignee
 from cutover_mcp.tools import tasks
 
 
@@ -342,6 +343,67 @@ async def test_update_runbook_task_all_params(mock_client_manager):
                     "stream": {"data": {"id": "stream456", "type": "stream"}},
                 },
             }
+        },
+    )
+
+
+@pytest.mark.asyncio
+async def test_update_runbook_task_with_assignees(mock_client_manager):
+    """Test updating a task with assignees (additive, default behaviour)."""
+    mock_client_manager.request.return_value = {
+        "data": {"id": "task123", "type": "task", "attributes": {"name": "Task"}}
+    }
+
+    assignees = [Assignee(id="user1", type="user"), Assignee(id="team1", type="runbook_team")]
+
+    await tasks.update_runbook_task.fn(runbook_id="rb123", task_id="task123", assignees=assignees)
+
+    mock_client_manager.request.assert_called_once_with(
+        "PATCH",
+        "core/runbooks/rb123/tasks/task123",
+        json_data={
+            "data": {
+                "type": "task",
+                "id": "task123",
+                "attributes": {},
+                "relationships": {
+                    "assignees": {"data": [{"id": "user1", "type": "user"}, {"id": "team1", "type": "runbook_team"}]}
+                },
+            },
+            "meta": {"delete_excluded_assignees": False},
+        },
+    )
+
+
+@pytest.mark.asyncio
+async def test_update_runbook_task_with_assignees_replace(mock_client_manager):
+    """Test updating a task with delete_excluded_assignees=True replaces the full list."""
+    mock_client_manager.request.return_value = {
+        "data": {"id": "task123", "type": "task", "attributes": {"name": "Task"}}
+    }
+
+    assignees = [Assignee(id="user2", type="user")]
+
+    await tasks.update_runbook_task.fn(
+        runbook_id="rb123",
+        task_id="task123",
+        assignees=assignees,
+        delete_excluded_assignees=True,
+    )
+
+    mock_client_manager.request.assert_called_once_with(
+        "PATCH",
+        "core/runbooks/rb123/tasks/task123",
+        json_data={
+            "data": {
+                "type": "task",
+                "id": "task123",
+                "attributes": {},
+                "relationships": {
+                    "assignees": {"data": [{"id": "user2", "type": "user"}]}
+                },
+            },
+            "meta": {"delete_excluded_assignees": True},
         },
     )
 
