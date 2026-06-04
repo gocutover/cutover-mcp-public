@@ -114,6 +114,21 @@ class Assignee(BaseModel):
     type: Literal["user", "runbook_team"]
 
 
+# NOTE: Cutover's task_links contract is asymmetric — writes require string
+# id, reads return int. Server-side bug tracked in API-461; drop the split
+# once that lands.
+#   TaskLink         — input (str id)
+#   TaskLinkResponse — output (int id), used in TaskAttributes.task_links
+class TaskLink(BaseModel):
+    id: str
+    link_type: Literal["runbook", "snippet"]
+
+
+class TaskLinkResponse(BaseModel):
+    id: int
+    link_type: Literal["runbook", "snippet"]
+
+
 class RunbookVersionIdentifier(JsonApiIdentifier):
     type: Literal["runbook_version"]
 
@@ -171,6 +186,7 @@ class TaskAttributes(BaseModel):
     updated_at: datetime | None = None
     custom_field_values: list[CustomFieldValue] | None = Field(None, alias="custom_field_values")
     comments_count: int | None = Field(None, alias="comments_count")
+    task_links: list[TaskLinkResponse] | None = None
 
 
 class TaskRelationships(BaseModel):

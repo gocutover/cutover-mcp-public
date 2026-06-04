@@ -576,6 +576,39 @@ async def test_create_runbook_with_template_type(mock_client_manager):
 
 
 @pytest.mark.asyncio
+async def test_create_runbook_with_folder_id(mock_client_manager):
+    """folder_id is sent as a folder relationship in the payload."""
+    mock_client_manager.request.return_value = {
+        "data": {
+            "id": "foldered-rb",
+            "type": "runbook",
+            "attributes": {"name": "In Folder", "description": ""},
+            "relationships": {
+                "workspace": {"data": {"id": "ws123", "type": "workspace"}},
+                "folder": {"data": {"id": "f42", "type": "folder"}},
+            },
+        }
+    }
+
+    await runbooks.create_runbook.fn(workspace_id="ws123", name="In Folder", folder_id="f42")
+
+    mock_client_manager.request.assert_called_once_with(
+        "POST",
+        "core/runbooks",
+        json_data={
+            "data": {
+                "type": "runbook",
+                "attributes": {"name": "In Folder", "description": ""},
+                "relationships": {
+                    "workspace": {"data": {"type": "workspace", "id": "ws123"}},
+                    "folder": {"data": {"type": "folder", "id": "f42"}},
+                },
+            }
+        },
+    )
+
+
+@pytest.mark.asyncio
 async def test_manage_runbook_start(mock_client_manager):
     """Test starting a runbook."""
     # Set up mock response

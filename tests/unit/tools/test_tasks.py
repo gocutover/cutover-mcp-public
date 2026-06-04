@@ -3,7 +3,7 @@ from unittest.mock import AsyncMock
 import httpx
 import pytest
 
-from cutover_mcp.models import Assignee
+from cutover_mcp.models import Assignee, TaskLink, TaskLinkResponse
 from cutover_mcp.tools import tasks
 
 
@@ -123,6 +123,133 @@ async def test_add_task_to_runbook_with_duration(mock_client_manager):
 
     # Verify the result
     assert result.data.attributes.duration == 1800
+
+
+@pytest.mark.asyncio
+async def test_add_task_to_runbook_with_task_links_runbook(mock_client_manager):
+    """Test adding a linked task that points at a template runbook."""
+    mock_client_manager.request.return_value = {
+        "data": {
+            "id": "task999",
+            "type": "task",
+            "attributes": {
+                "name": "Linked Task",
+                "description": "",
+                "task_links": [{"id": 1234, "link_type": "runbook"}],
+            },
+            "relationships": {"task_type": {"data": {"id": "3", "type": "task_type"}}},
+        }
+    }
+
+    result = await tasks.add_task_to_runbook.fn(
+        runbook_id="rb123",
+        name="Linked Task",
+        task_type_id="3",
+        task_links=[TaskLink(id="273", link_type="runbook")],
+    )
+
+    mock_client_manager.request.assert_called_once_with(
+        "POST",
+        "core/runbooks/rb123/tasks",
+        json_data={
+            "data": {
+                "type": "task",
+                "attributes": {
+                    "name": "Linked Task",
+                    "description": "",
+                    "task_links": [{"id": "273", "link_type": "runbook"}],
+                },
+                "relationships": {
+                    "task_type": {"data": {"id": "3", "type": "task_type"}},
+                },
+            }
+        },
+    )
+    assert result.data.attributes.task_links == [TaskLinkResponse(id=1234, link_type="runbook")]
+
+
+@pytest.mark.asyncio
+async def test_add_task_to_runbook_task_links_asymmetric_str_in_int_out(mock_client_manager):
+    """Cutover's task_links contract is asymmetric: writes require string ids
+    but responses return int ids (the bare AR primary key on the linked
+    runbook/snippet). Locks in the two-type model — TaskLink(str) for input,
+    TaskLinkResponse(int) for output.
+    """
+    mock_client_manager.request.return_value = {
+        "data": {
+            "id": "task997",
+            "type": "task",
+            "attributes": {
+                "name": "Linked Task",
+                "description": "",
+                "task_links": [{"id": 316, "link_type": "runbook"}],  # int, as the API returns
+            },
+            "relationships": {"task_type": {"data": {"id": "3", "type": "task_type"}}},
+        }
+    }
+
+    result = await tasks.add_task_to_runbook.fn(
+        runbook_id="rb123",
+        name="Linked Task",
+        task_type_id="3",
+        task_links=[TaskLink(id="273", link_type="runbook")],  # input is string
+    )
+
+    # request payload sent string
+    sent = mock_client_manager.request.call_args.kwargs["json_data"]
+    assert sent["data"]["attributes"]["task_links"] == [{"id": "273", "link_type": "runbook"}]
+    # response parsed as int
+    assert result.data.attributes.task_links == [TaskLinkResponse(id=316, link_type="runbook")]
+
+
+@pytest.mark.asyncio
+async def test_add_task_to_runbook_with_task_links_snippets(mock_client_manager):
+    """Test adding a task with multiple snippet links."""
+    mock_client_manager.request.return_value = {
+        "data": {
+            "id": "task998",
+            "type": "task",
+            "attributes": {
+                "name": "Snippeted Task",
+                "description": "",
+                "task_links": [
+                    {"id": 10, "link_type": "snippet"},
+                    {"id": 11, "link_type": "snippet"},
+                ],
+            },
+        }
+    }
+
+    result = await tasks.add_task_to_runbook.fn(
+        runbook_id="rb123",
+        name="Snippeted Task",
+        task_links=[
+            TaskLink(id="10", link_type="snippet"),
+            TaskLink(id="11", link_type="snippet"),
+        ],
+    )
+
+    mock_client_manager.request.assert_called_once_with(
+        "POST",
+        "core/runbooks/rb123/tasks",
+        json_data={
+            "data": {
+                "type": "task",
+                "attributes": {
+                    "name": "Snippeted Task",
+                    "description": "",
+                    "task_links": [
+                        {"id": "10", "link_type": "snippet"},
+                        {"id": "11", "link_type": "snippet"},
+                    ],
+                },
+            }
+        },
+    )
+    assert result.data.attributes.task_links == [
+        TaskLinkResponse(id=10, link_type="snippet"),
+        TaskLinkResponse(id=11, link_type="snippet"),
+    ]
 
 
 @pytest.mark.asyncio
@@ -342,6 +469,62 @@ async def test_update_runbook_task_all_params(mock_client_manager):
                     "task_type": {"data": {"id": "tt456", "type": "task_type"}},
                     "stream": {"data": {"id": "stream456", "type": "stream"}},
                 },
+            }
+        },
+    )
+
+
+@pytest.mark.asyncio
+async def test_update_runbook_task_with_task_links(mock_client_manager):
+    """Test updating a task's links (e.g. swap the target template of a linked task)."""
+    mock_client_manager.request.return_value = {
+        "data": {
+            "id": "task123",
+            "type": "task",
+            "attributes": {
+                "name": "Task",
+                "task_links": [{"id": 555, "link_type": "runbook"}],
+            },
+        }
+    }
+
+    result = await tasks.update_runbook_task.fn(
+        runbook_id="rb123",
+        task_id="task123",
+        task_links=[TaskLink(id="555", link_type="runbook")],
+    )
+
+    mock_client_manager.request.assert_called_once_with(
+        "PATCH",
+        "core/runbooks/rb123/tasks/task123",
+        json_data={
+            "data": {
+                "type": "task",
+                "id": "task123",
+                "attributes": {"task_links": [{"id": "555", "link_type": "runbook"}]},
+            }
+        },
+    )
+    assert result.data.attributes.task_links == [TaskLinkResponse(id=555, link_type="runbook")]
+
+
+@pytest.mark.asyncio
+async def test_update_runbook_task_clear_task_links(mock_client_manager):
+    """Empty list clears all task links."""
+    mock_client_manager.request.return_value = {
+        "data": {"id": "task123", "type": "task", "attributes": {"name": "Task"}}
+    }
+
+    await tasks.update_runbook_task.fn(runbook_id="rb123", task_id="task123", task_links=[])
+
+    mock_client_manager.request.assert_called_once_with(
+        "PATCH",
+        "core/runbooks/rb123/tasks/task123",
+        json_data={
+            "data": {
+                "type": "task",
+                "id": "task123",
+                "attributes": {"task_links": []},
             }
         },
     )

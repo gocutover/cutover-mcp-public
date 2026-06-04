@@ -2,7 +2,7 @@ from typing import Any
 
 from cutover_mcp.app import mcp
 from cutover_mcp.clients.api import client_mgr
-from cutover_mcp.models import Assignee, TaskResponse, inject_return_schema
+from cutover_mcp.models import Assignee, TaskLink, TaskResponse, inject_return_schema
 
 
 @mcp.tool()
@@ -15,6 +15,7 @@ async def add_task_to_runbook(
     stream_id: str | None = None,
     predecessors: list[str] | None = None,
     duration: int | None = None,
+    task_links: list[TaskLink] | None = None,
 ) -> TaskResponse:
     """
     Add a new task to an existing runbook.
@@ -26,6 +27,14 @@ async def add_task_to_runbook(
     :param stream_id: The ID of the stream to assign the task to (can be a substream).
     :param predecessors: A list of task IDs that are predecessors to this task.
     :param duration: Planned duration in seconds.
+    :param task_links: Links from this task to other resources. Use ``link_type="runbook"`` to link
+        a task to a template runbook — the target must be a template and must have ≥1 task, and
+        the task's ``task_type_id`` must be the tenant's ``linked`` task type (from
+        ``list_task_types``, the entry with ``key == "linked"``) or the link is silently dropped.
+        If the parent runbook isn't a template, the response's ``task_links[].id`` references a
+        freshly-spawned copy of the template, not the template itself, and the task's name is
+        overwritten with the target's name. Use ``link_type="snippet"`` to attach one or more
+        snippets.
     :return: A TaskResponse object representing the newly created task.
 
     JSON Schema of Return Object:
@@ -35,9 +44,11 @@ async def add_task_to_runbook(
 
     """
     client = client_mgr.get_client()
-    attributes: dict[str, str | int] = {"name": name, "description": description}
+    attributes = {"name": name, "description": description}
     if duration is not None:
         attributes["duration"] = duration
+    if task_links is not None:
+        attributes["task_links"] = [tl.model_dump() for tl in task_links]
 
     payload: dict = {"data": {"type": "task", "attributes": attributes}}
 
@@ -61,6 +72,7 @@ async def add_task_to_runbook(
 
 
 @mcp.tool()
+@inject_return_schema
 async def update_runbook_task(
     runbook_id: str,
     task_id: str,
@@ -73,6 +85,7 @@ async def update_runbook_task(
     custom_field_values: list[dict] | None = None,
     assignees: list[Assignee] | None = None,
     delete_excluded_assignees: bool = False,
+    task_links: list[TaskLink] | None = None,
 ) -> TaskResponse:
     """
     Update an existing task in a runbook (including dependencies, description, stream, duration, etc.).
@@ -94,7 +107,15 @@ async def update_runbook_task(
         removing existing assignees; set delete_excluded_assignees=True to replace the full list instead.
     :param delete_excluded_assignees: When False (default), adds the given assignees without removing existing
         ones. When True, replaces the full assignee list with only the assignees provided.
+    :param task_links: Replaces the task's links to other resources. Use ``link_type="runbook"`` to link
+        a task to a template runbook — the target must be a template runbook and must have ≥1 task. Use
+        ``link_type="snippet"`` to attach one or more snippets. Pass an empty list to clear all links.
     :return: A TaskResponse object representing the updated task.
+
+    JSON Schema of Return Object:
+    ```json
+    {return_schema}
+    ```
     """
     client = client_mgr.get_client()
     attributes: dict = {}
@@ -106,6 +127,8 @@ async def update_runbook_task(
         attributes["duration"] = duration
     if custom_field_values is not None:
         attributes["custom_field_values"] = custom_field_values
+    if task_links is not None:
+        attributes["task_links"] = [tl.model_dump() for tl in task_links]
 
     payload: dict = {"data": {"type": "task", "id": task_id, "attributes": attributes}}
 

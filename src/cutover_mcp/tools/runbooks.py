@@ -275,6 +275,7 @@ async def create_runbook(
     rto_end_task: str | None = None,
     rto_start_task: str | None = None,
     runbook_type_id: str | None = None,
+    folder_id: str | None = None,
 ) -> RunbookResponse:
     """
     Create a new runbook in a workspace.
@@ -290,6 +291,8 @@ async def create_runbook(
     :param runbook_type_id: The ID of the runbook type to associate with this runbook (optional, relationship field).
     :param rto_start_task: ID of the start task for RTO/RTA feature (optional, relationship field).
     :param rto_end_task: ID of the end task for RTO/RTA feature (optional, relationship field).
+    :param folder_id: ID of the folder to place the new runbook in (optional, relationship field).
+        If omitted, the runbook lands in the workspace's default location.
     :return: A RunbookResponse object representing the newly created runbook.
     """
     client = client_mgr.get_client()
@@ -312,6 +315,8 @@ async def create_runbook(
         relationships["rto_start_task"] = {"data": {"type": "task", "id": rto_start_task}}
     if rto_end_task is not None:
         relationships["rto_end_task"] = {"data": {"type": "task", "id": rto_end_task}}
+    if folder_id is not None:
+        relationships["folder"] = {"data": {"type": "folder", "id": folder_id}}
 
     payload = {
         "data": {
