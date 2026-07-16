@@ -28,7 +28,7 @@ async def test_get_activities_basic(mock_client_manager):
     }
 
     # Call the function
-    result = await activities.get_activities.fn(runbook_id="rb-456")
+    result = await activities.get_activities(runbook_id="rb-456")
 
     # Verify the API call
     mock_client_manager.request.assert_called_once_with("GET", "core/activities", params={"runbook_id": "rb-456"})
@@ -47,7 +47,7 @@ async def test_get_activities_with_date_filters(mock_client_manager):
     mock_client_manager.request.return_value = {"data": [], "links": {}}
 
     # Call the function
-    await activities.get_activities.fn(
+    await activities.get_activities(
         runbook_id="rb-789",
         created_after="2025-01-01T00:00:00Z",
         created_before="2025-12-31T23:59:59Z",
@@ -81,7 +81,7 @@ async def test_get_activities_with_pagination(mock_client_manager):
     ]
 
     # Call the function
-    result = await activities.get_activities.fn(runbook_id="rb-100")
+    result = await activities.get_activities(runbook_id="rb-100")
 
     # Verify both pages were fetched
     assert len(result) == 2
@@ -114,7 +114,7 @@ async def test_get_activities_with_relationships(mock_client_manager):
     }
 
     # Call the function
-    result = await activities.get_activities.fn(runbook_id="rb-300")
+    result = await activities.get_activities(runbook_id="rb-300")
 
     # Verify relationships are extracted
     assert result[0]["activist_id"] == "user-1"
@@ -132,7 +132,7 @@ async def test_get_activities_empty_response(mock_client_manager):
     mock_client_manager.request.return_value = {"data": [], "links": {}}
 
     # Call the function
-    result = await activities.get_activities.fn(runbook_id="rb-404")
+    result = await activities.get_activities(runbook_id="rb-404")
 
     # Verify the result is empty
     assert result == []
@@ -148,7 +148,7 @@ async def test_get_activities_without_meta_message(mock_client_manager):
     }
 
     # Call the function
-    result = await activities.get_activities.fn(runbook_id="rb-500")
+    result = await activities.get_activities(runbook_id="rb-500")
 
     # Verify description is not present when meta.message is missing
     assert "description" not in result[0]
@@ -171,7 +171,7 @@ async def test_get_activities_starred(mock_client_manager):
     }
 
     # Call the function
-    result = await activities.get_activities.fn(runbook_id="rb-600")
+    result = await activities.get_activities(runbook_id="rb-600")
 
     # Verify starred is True
     assert result[0]["starred"] is True
@@ -193,6 +193,6 @@ async def test_get_activities_error_handling(mock_client_manager):
 
     # Should raise the exception
     with pytest.raises(httpx.HTTPStatusError) as exc_info:
-        await activities.get_activities.fn(runbook_id="rb-forbidden")
+        await activities.get_activities(runbook_id="rb-forbidden")
 
     assert exc_info.value.response.status_code == 403

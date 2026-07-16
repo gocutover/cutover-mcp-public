@@ -44,7 +44,7 @@ async def test_list_custom_fields_no_filter(mock_client_manager):
     }
 
     # Call the function
-    result = await custom_fields.list_custom_fields.fn()
+    result = await custom_fields.list_custom_fields()
 
     # Verify the API call
     mock_client_manager.request.assert_called_once_with("GET", "core/custom_fields", params={})
@@ -81,7 +81,7 @@ async def test_list_custom_fields_with_workspace_filter(mock_client_manager):
     }
 
     # Call the function
-    await custom_fields.list_custom_fields.fn(workspace_id="ws-123")
+    await custom_fields.list_custom_fields(workspace_id="ws-123")
 
     # Verify the API call includes workspace filter
     mock_client_manager.request.assert_called_once_with("GET", "core/custom_fields", params={"workspace_id": "ws-123"})
@@ -115,7 +115,7 @@ async def test_list_custom_fields_skips_archived(mock_client_manager):
     }
 
     # Call the function
-    result = await custom_fields.list_custom_fields.fn()
+    result = await custom_fields.list_custom_fields()
 
     # Verify only the active field is returned
     assert len(result) == 1
@@ -157,7 +157,7 @@ async def test_list_custom_fields_paginates(mock_client_manager):
     }
     mock_client_manager.request.side_effect = [page1, page2]
 
-    result = await custom_fields.list_custom_fields.fn()
+    result = await custom_fields.list_custom_fields()
 
     assert len(result) == 2
     assert result[0]["id"] == "cf-1"
@@ -177,7 +177,7 @@ async def test_list_custom_fields_empty(mock_client_manager):
     mock_client_manager.request.return_value = {"data": []}
 
     # Call the function
-    result = await custom_fields.list_custom_fields.fn()
+    result = await custom_fields.list_custom_fields()
 
     # Verify the result is empty
     assert result == []
@@ -205,7 +205,7 @@ async def test_get_custom_field(mock_client_manager):
     }
 
     # Call the function
-    result = await custom_fields.get_custom_field.fn(custom_field_id="cf-1")
+    result = await custom_fields.get_custom_field(custom_field_id="cf-1")
 
     # Verify the API call
     mock_client_manager.request.assert_called_once_with("GET", "core/custom_fields/cf-1")
@@ -238,6 +238,6 @@ async def test_get_custom_field_error_handling(mock_client_manager):
 
     # Should raise the exception
     with pytest.raises(httpx.HTTPStatusError) as exc_info:
-        await custom_fields.get_custom_field.fn(custom_field_id="nonexistent")
+        await custom_fields.get_custom_field(custom_field_id="nonexistent")
 
     assert exc_info.value.response.status_code == 404

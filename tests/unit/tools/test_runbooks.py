@@ -24,7 +24,7 @@ async def test_get_runbook_by_id(mock_client_manager):
     }
 
     # Call the function
-    result = await runbooks.get_runbook_by_id.fn("rb123")
+    result = await runbooks.get_runbook_by_id("rb123")
 
     # Verify the API call
     mock_client_manager.request.assert_called_once_with("GET", "core/runbooks/rb123")
@@ -57,7 +57,7 @@ async def test_list_runbooks(mock_client_manager):
     }
 
     # Call the function
-    result = await runbooks.list_runbooks.fn("ws123")
+    result = await runbooks.list_runbooks("ws123")
 
     # Verify the API call
     mock_client_manager.request.assert_called_once_with("GET", "core/runbooks", params={"workspace_id": "ws123"})
@@ -76,7 +76,7 @@ async def test_list_runbooks_with_filters(mock_client_manager):
         "links": {},
     }
 
-    result = await runbooks.list_runbooks.fn("ws123", source_runbook_id="tmpl1", folder_id="f42")
+    result = await runbooks.list_runbooks("ws123", source_runbook_id="tmpl1", folder_id="f42")
 
     mock_client_manager.request.assert_called_once_with(
         "GET",
@@ -95,7 +95,7 @@ async def test_list_runbooks_with_is_template_false(mock_client_manager):
         "links": {},
     }
 
-    await runbooks.list_runbooks.fn("ws123", is_template=False)
+    await runbooks.list_runbooks("ws123", is_template=False)
 
     mock_client_manager.request.assert_called_once_with(
         "GET",
@@ -118,7 +118,7 @@ async def test_list_runbooks_with_pagination(mock_client_manager):
         },
     ]
 
-    result = await runbooks.list_runbooks.fn("ws123")
+    result = await runbooks.list_runbooks("ws123")
 
     assert mock_client_manager.request.call_count == 2
     calls = mock_client_manager.request.call_args_list
@@ -147,7 +147,7 @@ async def test_get_runbook_tasks(mock_client_manager):
         "links": {},
     }
 
-    result = await runbooks.get_runbook_tasks.fn("rb123")
+    result = await runbooks.get_runbook_tasks("rb123")
 
     mock_client_manager.request.assert_called_once_with("GET", "core/runbooks/rb123/tasks", params={})
 
@@ -165,7 +165,7 @@ async def test_get_runbook_tasks_with_stage_filter(mock_client_manager):
         "links": {},
     }
 
-    result = await runbooks.get_runbook_tasks.fn("rb123", stage=["in_progress"])
+    result = await runbooks.get_runbook_tasks("rb123", stage=["in_progress"])
 
     mock_client_manager.request.assert_called_once_with(
         "GET", "core/runbooks/rb123/tasks", params={"stage": "in_progress"}
@@ -183,7 +183,7 @@ async def test_get_runbook_tasks_with_multiple_filters(mock_client_manager):
         "links": {},
     }
 
-    result = await runbooks.get_runbook_tasks.fn(
+    result = await runbooks.get_runbook_tasks(
         "rb123",
         stage=["startable", "in_progress"],
         stream_id=["stream1"],
@@ -217,7 +217,7 @@ async def test_get_runbook_tasks_with_forecast(mock_client_manager):
         "links": {},
     }
 
-    result = await runbooks.get_runbook_tasks.fn("rb123", forecast=True)
+    result = await runbooks.get_runbook_tasks("rb123", forecast=True)
 
     mock_client_manager.request.assert_called_once_with("GET", "core/runbooks/rb123/tasks", params={"forecast": "true"})
     assert len(result.data) == 1
@@ -241,7 +241,7 @@ async def test_get_runbook_tasks_pagination(mock_client_manager):
         },
     ]
 
-    result = await runbooks.get_runbook_tasks.fn("rb123")
+    result = await runbooks.get_runbook_tasks("rb123")
 
     assert mock_client_manager.request.call_count == 2
     calls = mock_client_manager.request.call_args_list
@@ -261,7 +261,7 @@ async def test_get_runbook_tasks_with_fields_task(mock_client_manager):
         "links": {},
     }
 
-    await runbooks.get_runbook_tasks.fn("rb123", fields_task=["name", "stage", "start_planned"])
+    await runbooks.get_runbook_tasks("rb123", fields_task=["name", "stage", "start_planned"])
 
     mock_client_manager.request.assert_called_once_with(
         "GET",
@@ -279,7 +279,7 @@ async def test_get_runbook_tasks_with_completion_type_level_has_comments_and_sor
         "links": {},
     }
 
-    await runbooks.get_runbook_tasks.fn(
+    await runbooks.get_runbook_tasks(
         "rb123",
         completion_type="complete_normal",
         level="1",
@@ -308,7 +308,7 @@ async def test_get_runbook_tasks_with_task_type_team_user_and_source_filters(moc
         "links": {},
     }
 
-    await runbooks.get_runbook_tasks.fn(
+    await runbooks.get_runbook_tasks(
         "rb123",
         task_type_id=["tt1", "tt2"],
         runbook_team_id=["team1"],
@@ -348,7 +348,7 @@ async def test_get_runbook_tasks_forecast_does_not_paginate(mock_client_manager)
         "links": {"next": "core/runbooks/rb123/tasks?page[number]=2"},
     }
 
-    result = await runbooks.get_runbook_tasks.fn("rb123", forecast=True)
+    result = await runbooks.get_runbook_tasks("rb123", forecast=True)
 
     mock_client_manager.request.assert_called_once()
     assert len(result.data) == 2
@@ -370,7 +370,7 @@ async def test_update_runbook_name_only(mock_client_manager):
     }
 
     # Call the function
-    result = await runbooks.update_runbook.fn(runbook_id="rb123", name="Updated Runbook")
+    result = await runbooks.update_runbook(runbook_id="rb123", name="Updated Runbook")
 
     # Verify the API call
     mock_client_manager.request.assert_called_once_with(
@@ -409,7 +409,7 @@ async def test_update_runbook_with_rto_tasks(mock_client_manager):
     }
 
     # Call the function
-    result = await runbooks.update_runbook.fn(
+    result = await runbooks.update_runbook(
         runbook_id="rb123",
         name="RTO Runbook",
         rto=3600,
@@ -455,7 +455,7 @@ async def test_create_runbook_minimal(mock_client_manager):
     }
 
     # Call the function
-    result = await runbooks.create_runbook.fn(workspace_id="ws123", name="New Runbook")
+    result = await runbooks.create_runbook(workspace_id="ws123", name="New Runbook")
 
     # Verify the API call
     mock_client_manager.request.assert_called_once_with(
@@ -499,7 +499,7 @@ async def test_create_runbook_full_params(mock_client_manager):
     }
 
     # Call the function with all params
-    result = await runbooks.create_runbook.fn(
+    result = await runbooks.create_runbook(
         workspace_id="ws123",
         name="Full Runbook",
         description="Complete runbook",
@@ -553,7 +553,7 @@ async def test_create_runbook_with_template_type(mock_client_manager):
         }
     }
 
-    result = await runbooks.create_runbook.fn(
+    result = await runbooks.create_runbook(
         workspace_id="ws123",
         name="My Template",
         template_type="default",
@@ -590,7 +590,7 @@ async def test_create_runbook_with_folder_id(mock_client_manager):
         }
     }
 
-    await runbooks.create_runbook.fn(workspace_id="ws123", name="In Folder", folder_id="f42")
+    await runbooks.create_runbook(workspace_id="ws123", name="In Folder", folder_id="f42")
 
     mock_client_manager.request.assert_called_once_with(
         "POST",
@@ -615,7 +615,7 @@ async def test_manage_runbook_start(mock_client_manager):
     mock_client_manager.request.return_value = {"status": "started"}
 
     # Call the function
-    result = await runbooks.manage_runbook.fn(
+    result = await runbooks.manage_runbook(
         runbook_id="rb123",
         action="start",
         comms="on",
@@ -650,7 +650,7 @@ async def test_manage_runbook_cancel(mock_client_manager):
     mock_client_manager.request.return_value = {"status": "cancelled"}
 
     # Call the function
-    result = await runbooks.manage_runbook.fn(
+    result = await runbooks.manage_runbook(
         runbook_id="rb123",
         action="cancel",
         message="Cancelling due to issue",
@@ -680,7 +680,7 @@ async def test_manage_runbook_pause(mock_client_manager):
     mock_client_manager.request.return_value = {"status": "paused"}
 
     # Call the function
-    result = await runbooks.manage_runbook.fn(runbook_id="rb123", action="pause", message="Pausing for review")
+    result = await runbooks.manage_runbook(runbook_id="rb123", action="pause", message="Pausing for review")
 
     # Verify the API call
     mock_client_manager.request.assert_called_once_with(
@@ -700,7 +700,7 @@ async def test_manage_runbook_resume(mock_client_manager):
     mock_client_manager.request.return_value = {"status": "resumed"}
 
     # Call the function
-    result = await runbooks.manage_runbook.fn(runbook_id="rb123", action="resume")
+    result = await runbooks.manage_runbook(runbook_id="rb123", action="resume")
 
     # Verify the API call
     mock_client_manager.request.assert_called_once_with(
@@ -716,7 +716,7 @@ async def test_manage_runbook_invalid_action(mock_client_manager):
     """Test invalid action for manage_runbook."""
     # Should raise ValueError for invalid action
     with pytest.raises(ValueError, match="Invalid action: invalid"):
-        await runbooks.manage_runbook.fn(runbook_id="rb123", action="invalid")
+        await runbooks.manage_runbook(runbook_id="rb123", action="invalid")
     mock_client_manager.request.assert_not_called()
 
 
@@ -736,7 +736,7 @@ async def test_runbook_not_found_error(mock_client_manager):
 
     # Should raise the exception
     with pytest.raises(httpx.HTTPStatusError) as exc_info:
-        await runbooks.get_runbook_by_id.fn("invalid-rb")
+        await runbooks.get_runbook_by_id("invalid-rb")
 
     assert exc_info.value.response.status_code == 404
 
@@ -761,7 +761,7 @@ async def test_update_runbook_with_custom_field_values(mock_client_manager):
     ]
 
     # Call the function
-    await runbooks.update_runbook.fn(runbook_id="rb123", custom_field_values=custom_fields)
+    await runbooks.update_runbook(runbook_id="rb123", custom_field_values=custom_fields)
 
     # Verify custom_field_values is included in the payload
     mock_client_manager.request.assert_called_once_with(
@@ -788,7 +788,7 @@ async def test_get_runbook_template_copies(mock_client_manager):
         "links": {},
     }
 
-    result = await runbooks.get_runbook_template_copies.fn(runbook_id="rb-template")
+    result = await runbooks.get_runbook_template_copies(runbook_id="rb-template")
 
     mock_client_manager.request.assert_called_once_with("GET", "core/runbooks?source_runbook_id=rb-template")
 
@@ -813,7 +813,7 @@ async def test_get_runbook_template_copies_with_pagination(mock_client_manager):
         },
     ]
 
-    result = await runbooks.get_runbook_template_copies.fn(runbook_id="rb-template")
+    result = await runbooks.get_runbook_template_copies(runbook_id="rb-template")
 
     assert mock_client_manager.request.call_count == 2
     calls = mock_client_manager.request.call_args_list
@@ -835,7 +835,7 @@ async def test_get_runbook_template_copies_empty(mock_client_manager):
         "links": {},
     }
 
-    result = await runbooks.get_runbook_template_copies.fn(runbook_id="rb-no-copies")
+    result = await runbooks.get_runbook_template_copies(runbook_id="rb-no-copies")
 
     assert len(result.data) == 0
     assert result.meta.page.total == 0

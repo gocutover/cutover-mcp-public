@@ -23,7 +23,7 @@ async def test_get_user(mock_client_manager):
     }
 
     # Call the function
-    result = await users.get_user.fn(user_id="user-123")
+    result = await users.get_user(user_id="user-123")
 
     # Verify the API call
     mock_client_manager.request.assert_called_once_with("GET", "core/users/user-123")
@@ -51,7 +51,7 @@ async def test_get_user_first_name_only(mock_client_manager):
     }
 
     # Call the function
-    result = await users.get_user.fn(user_id="user-456")
+    result = await users.get_user(user_id="user-456")
 
     # Verify full_name is just the first name
     assert result["full_name"] == "Alice"
@@ -75,7 +75,7 @@ async def test_get_user_falls_back_to_name(mock_client_manager):
     }
 
     # Call the function
-    result = await users.get_user.fn(user_id="user-789")
+    result = await users.get_user(user_id="user-789")
 
     # Verify full_name falls back to name attribute
     assert result["full_name"] == "System Bot"
@@ -96,7 +96,7 @@ async def test_get_user_missing_name_fields(mock_client_manager):
     }
 
     # Call the function
-    result = await users.get_user.fn(user_id="user-000")
+    result = await users.get_user(user_id="user-000")
 
     # Verify full_name is empty string when no name fields exist
     assert result["full_name"] == ""
@@ -119,7 +119,7 @@ async def test_get_user_error_handling(mock_client_manager):
 
     # Should raise the exception
     with pytest.raises(httpx.HTTPStatusError) as exc_info:
-        await users.get_user.fn(user_id="nonexistent")
+        await users.get_user(user_id="nonexistent")
 
     assert exc_info.value.response.status_code == 404
 
@@ -142,7 +142,7 @@ async def test_search_users_returns_matches(mock_client_manager):
         ]
     }
 
-    result = await users.search_users.fn(query="Alice")
+    result = await users.search_users(query="Alice")
 
     mock_client_manager.request.assert_called_once_with("GET", "core/users", params={"query": "Alice"})
     assert len(result) == 2
@@ -155,7 +155,7 @@ async def test_search_users_empty_results(mock_client_manager):
     """Test searching users returns empty list when no matches."""
     mock_client_manager.request.return_value = {"data": []}
 
-    result = await users.search_users.fn(query="nobody")
+    result = await users.search_users(query="nobody")
 
     mock_client_manager.request.assert_called_once_with("GET", "core/users", params={"query": "nobody"})
     assert result == []

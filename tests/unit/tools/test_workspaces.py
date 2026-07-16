@@ -16,7 +16,7 @@ async def test_get_workspace_by_id(mock_client_manager):
     }
 
     # Call the function
-    result = await workspaces.get_workspace_by_id.fn("ws123")
+    result = await workspaces.get_workspace_by_id("ws123")
 
     # Verify the API call
     mock_client_manager.request.assert_called_once_with("GET", "core/workspaces/ws123")
@@ -37,7 +37,7 @@ async def test_query_workspaces(mock_client_manager):
     }
 
     # Call the function
-    result = await workspaces.query_workspaces.fn("prod")
+    result = await workspaces.query_workspaces("prod")
 
     # Verify the API call
     mock_client_manager.request.assert_called_once_with("GET", "core/workspaces", params={"query": "prod"})
@@ -54,7 +54,7 @@ async def test_list_workspaces_default_params(mock_client_manager):
     mock_client_manager.request.return_value = {"data": [{"id": "ws1"}, {"id": "ws2"}], "meta": {"total": 2}}
 
     # Call the function with defaults
-    result = await workspaces.list_workspaces.fn()
+    result = await workspaces.list_workspaces()
 
     # Verify the API call with default pagination
     mock_client_manager.request.assert_called_once_with(
@@ -75,7 +75,7 @@ async def test_list_workspaces_with_pagination(mock_client_manager):
     }
 
     # Call the function with custom pagination
-    result = await workspaces.list_workspaces.fn(limit=2, offset=2)
+    result = await workspaces.list_workspaces(limit=2, offset=2)
 
     # Verify the API call
     mock_client_manager.request.assert_called_once_with(
@@ -100,7 +100,7 @@ async def test_create_workspace_minimal(mock_client_manager):
     }
 
     # Call the function with minimal params
-    result = await workspaces.create_workspace.fn(name="New Workspace")
+    result = await workspaces.create_workspace(name="New Workspace")
 
     # Verify the API call
     mock_client_manager.request.assert_called_once_with(
@@ -129,7 +129,7 @@ async def test_create_workspace_full_params(mock_client_manager):
     }
 
     # Call the function with all params
-    result = await workspaces.create_workspace.fn(name="Full Workspace", description="A complete workspace", key="FULL")
+    result = await workspaces.create_workspace(name="Full Workspace", description="A complete workspace", key="FULL")
 
     # Verify the API call
     mock_client_manager.request.assert_called_once_with(
@@ -167,7 +167,7 @@ async def test_workspace_not_found_error(mock_client_manager):
 
     # Call should raise the exception
     with pytest.raises(httpx.HTTPStatusError) as exc_info:
-        await workspaces.get_workspace_by_id.fn("invalid")
+        await workspaces.get_workspace_by_id("invalid")
 
     # Verify the exception details
     assert exc_info.value.response.status_code == 404
@@ -180,7 +180,7 @@ async def test_empty_workspace_list(mock_client_manager):
     mock_client_manager.request.return_value = {"data": [], "meta": {"total": 0}}
 
     # Call the function
-    result = await workspaces.list_workspaces.fn()
+    result = await workspaces.list_workspaces()
 
     # Verify the result
     assert result["data"] == []
@@ -197,7 +197,7 @@ async def test_query_workspaces_special_characters(mock_client_manager):
     }
 
     # Call with special characters
-    result = await workspaces.query_workspaces.fn("Test & Dev")
+    result = await workspaces.query_workspaces("Test & Dev")
 
     # Verify the API call properly passes the query
     mock_client_manager.request.assert_called_once_with("GET", "core/workspaces", params={"query": "Test & Dev"})

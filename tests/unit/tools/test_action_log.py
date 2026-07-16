@@ -39,7 +39,7 @@ async def test_get_action_logs_no_filters(mock_client_manager):
     }
 
     # Call the function
-    result = await action_log.get_action_logs.fn()
+    result = await action_log.get_action_logs()
 
     # Verify the API call
     mock_client_manager.request.assert_called_once_with("GET", "core/action_logs", params={})
@@ -62,7 +62,7 @@ async def test_get_action_logs_with_runbook_filter(mock_client_manager):
     mock_client_manager.request.return_value = {"data": [], "links": {}}
 
     # Call the function
-    await action_log.get_action_logs.fn(runbook_id="rb123")
+    await action_log.get_action_logs(runbook_id="rb123")
 
     # Verify the API call includes runbook filter as params
     mock_client_manager.request.assert_called_once_with("GET", "core/action_logs", params={"runbook_id": "rb123"})
@@ -75,7 +75,7 @@ async def test_get_action_logs_with_user_filter(mock_client_manager):
     mock_client_manager.request.return_value = {"data": [], "links": {}}
 
     # Call the function
-    await action_log.get_action_logs.fn(user_id="user456")
+    await action_log.get_action_logs(user_id="user456")
 
     # Verify the API call includes user filter as params
     mock_client_manager.request.assert_called_once_with("GET", "core/action_logs", params={"user_id": "user456"})
@@ -88,7 +88,7 @@ async def test_get_action_logs_with_workspace_filter(mock_client_manager):
     mock_client_manager.request.return_value = {"data": [], "links": {}}
 
     # Call the function
-    await action_log.get_action_logs.fn(workspace_id="ws789")
+    await action_log.get_action_logs(workspace_id="ws789")
 
     # Verify the API call includes workspace filter as params
     mock_client_manager.request.assert_called_once_with("GET", "core/action_logs", params={"workspace_id": "ws789"})
@@ -101,7 +101,7 @@ async def test_get_action_logs_with_date_range(mock_client_manager):
     mock_client_manager.request.return_value = {"data": [], "links": {}}
 
     # Call the function
-    await action_log.get_action_logs.fn(
+    await action_log.get_action_logs(
         created_after="2024-01-01T10:00:00Z",
         created_before="2024-01-01T11:00:00Z",
     )
@@ -121,7 +121,7 @@ async def test_get_action_logs_all_filters(mock_client_manager):
     mock_client_manager.request.return_value = {"data": [], "links": {}}
 
     # Call the function with all filters
-    await action_log.get_action_logs.fn(
+    await action_log.get_action_logs(
         runbook_id="rb123",
         user_id="user456",
         workspace_id="ws789",
@@ -199,7 +199,7 @@ async def test_get_action_logs_cursor_pagination(mock_client_manager):
     ]
 
     # Call the function
-    result = await action_log.get_action_logs.fn()
+    result = await action_log.get_action_logs()
 
     # Verify all pages were fetched
     assert mock_client_manager.request.call_count == 3
@@ -239,7 +239,7 @@ async def test_get_action_logs_extracts_author_info(mock_client_manager):
     }
 
     # Call the function
-    result = await action_log.get_action_logs.fn()
+    result = await action_log.get_action_logs()
 
     # Verify author info is extracted
     assert result[0]["author_id"] == "user-1"
@@ -270,7 +270,7 @@ async def test_get_action_logs_extracts_resource_info(mock_client_manager):
     }
 
     # Call the function
-    result = await action_log.get_action_logs.fn()
+    result = await action_log.get_action_logs()
 
     # Verify resource info is extracted
     assert result[0]["resource_id"] == "runbook-1"
@@ -299,7 +299,7 @@ async def test_get_action_logs_missing_relationships(mock_client_manager):
     }
 
     # Call the function
-    result = await action_log.get_action_logs.fn()
+    result = await action_log.get_action_logs()
 
     # Verify no relationship keys are present
     assert "author_id" not in result[0]
@@ -315,7 +315,7 @@ async def test_get_action_logs_empty_result(mock_client_manager):
     mock_client_manager.request.return_value = {"data": [], "links": {}}
 
     # Call the function
-    result = await action_log.get_action_logs.fn(runbook_id="nonexistent")
+    result = await action_log.get_action_logs(runbook_id="nonexistent")
 
     # Verify the result is empty
     assert result == []
@@ -337,6 +337,6 @@ async def test_get_action_logs_error_handling(mock_client_manager):
 
     # Should raise the exception
     with pytest.raises(httpx.HTTPStatusError) as exc_info:
-        await action_log.get_action_logs.fn()
+        await action_log.get_action_logs()
 
     assert exc_info.value.response.status_code == 403

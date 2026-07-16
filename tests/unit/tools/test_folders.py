@@ -56,7 +56,7 @@ async def test_list_folders(mock_client_manager):
         "links": {"self": "https://api.cutover.com/core/workspaces/1/folders", "next": None},
     }
 
-    result = await folders.list_folders.fn(workspace_id="1")
+    result = await folders.list_folders(workspace_id="1")
 
     mock_client_manager.request.assert_called_once_with("GET", "core/workspaces/1/folders")
 
@@ -75,7 +75,7 @@ async def test_list_folders_with_subfolder(mock_client_manager):
         "links": {"self": "https://api.cutover.com/core/workspaces/1/folders", "next": None},
     }
 
-    result = await folders.list_folders.fn(workspace_id="1")
+    result = await folders.list_folders(workspace_id="1")
 
     assert len(result.data) == 2
 
@@ -96,7 +96,7 @@ async def test_list_folders_empty(mock_client_manager):
         "links": {"self": "https://api.cutover.com/core/workspaces/1/folders", "next": None},
     }
 
-    result = await folders.list_folders.fn(workspace_id="1")
+    result = await folders.list_folders(workspace_id="1")
 
     assert len(result.data) == 0
 
@@ -123,7 +123,7 @@ async def test_list_folders_pagination(mock_client_manager):
         },
     ]
 
-    result = await folders.list_folders.fn(workspace_id="1")
+    result = await folders.list_folders(workspace_id="1")
 
     assert mock_client_manager.request.call_count == 2
 

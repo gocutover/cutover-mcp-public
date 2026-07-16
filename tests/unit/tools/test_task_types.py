@@ -43,7 +43,7 @@ async def test_list_task_types(mock_client_manager):
     }
 
     # Call the function
-    result = await task_types.list_task_types.fn()
+    result = await task_types.list_task_types()
 
     # Verify the API call
     mock_client_manager.request.assert_called_once_with("GET", "core/task_types")
@@ -70,7 +70,7 @@ async def test_list_task_types_empty(mock_client_manager):
     }
 
     # Call the function
-    result = await task_types.list_task_types.fn()
+    result = await task_types.list_task_types()
 
     # Verify the API call
     mock_client_manager.request.assert_called_once_with("GET", "core/task_types")
@@ -97,7 +97,7 @@ async def test_list_task_types_minimal_attributes(mock_client_manager):
     }
 
     # Call the function
-    result = await task_types.list_task_types.fn()
+    result = await task_types.list_task_types()
 
     # Verify the result
     assert len(result["data"]) == 1
@@ -129,7 +129,7 @@ async def test_list_task_types_error_handling(mock_client_manager):
 
     # Should raise the exception
     with pytest.raises(httpx.HTTPStatusError) as exc_info:
-        await task_types.list_task_types.fn()
+        await task_types.list_task_types()
 
     assert exc_info.value.response.status_code == 500
 
@@ -152,7 +152,7 @@ async def test_list_task_types_authentication_error(mock_client_manager):
 
     # Should raise the exception
     with pytest.raises(httpx.HTTPStatusError) as exc_info:
-        await task_types.list_task_types.fn()
+        await task_types.list_task_types()
 
     assert exc_info.value.response.status_code == 401
 
@@ -180,7 +180,7 @@ async def test_list_task_types_large_response(mock_client_manager):
     }
 
     # Call the function
-    result = await task_types.list_task_types.fn()
+    result = await task_types.list_task_types()
 
     # Verify the result
     assert len(result["data"]) == 100

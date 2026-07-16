@@ -24,7 +24,7 @@ async def test_add_task_to_runbook_minimal(mock_client_manager):
     }
 
     # Call the function
-    result = await tasks.add_task_to_runbook.fn(runbook_id="rb123", name="New Task")
+    result = await tasks.add_task_to_runbook(runbook_id="rb123", name="New Task")
 
     # Verify the API call
     mock_client_manager.request.assert_called_once_with(
@@ -63,7 +63,7 @@ async def test_add_task_to_runbook_full_params(mock_client_manager):
     }
 
     # Call the function with all params
-    result = await tasks.add_task_to_runbook.fn(
+    result = await tasks.add_task_to_runbook(
         runbook_id="rb123",
         name="Full Task",
         description="Task with all params",
@@ -112,7 +112,7 @@ async def test_add_task_to_runbook_with_duration(mock_client_manager):
     }
 
     # Call the function
-    result = await tasks.add_task_to_runbook.fn(runbook_id="rb123", name="Timed Task", duration=1800)
+    result = await tasks.add_task_to_runbook(runbook_id="rb123", name="Timed Task", duration=1800)
 
     # Verify duration is included in the payload
     mock_client_manager.request.assert_called_once_with(
@@ -141,7 +141,7 @@ async def test_add_task_to_runbook_with_task_links_runbook(mock_client_manager):
         }
     }
 
-    result = await tasks.add_task_to_runbook.fn(
+    result = await tasks.add_task_to_runbook(
         runbook_id="rb123",
         name="Linked Task",
         task_type_id="3",
@@ -188,7 +188,7 @@ async def test_add_task_to_runbook_task_links_asymmetric_str_in_int_out(mock_cli
         }
     }
 
-    result = await tasks.add_task_to_runbook.fn(
+    result = await tasks.add_task_to_runbook(
         runbook_id="rb123",
         name="Linked Task",
         task_type_id="3",
@@ -220,7 +220,7 @@ async def test_add_task_to_runbook_with_task_links_snippets(mock_client_manager)
         }
     }
 
-    result = await tasks.add_task_to_runbook.fn(
+    result = await tasks.add_task_to_runbook(
         runbook_id="rb123",
         name="Snippeted Task",
         task_links=[
@@ -268,7 +268,7 @@ async def test_add_task_to_runbook_with_predecessors(mock_client_manager):
     }
 
     # Call the function
-    await tasks.add_task_to_runbook.fn(runbook_id="rb123", name="Dependent Task", predecessors=["pred1", "pred2"])
+    await tasks.add_task_to_runbook(runbook_id="rb123", name="Dependent Task", predecessors=["pred1", "pred2"])
 
     # Verify predecessors are included in the payload
     mock_client_manager.request.assert_called_once_with(
@@ -302,7 +302,7 @@ async def test_update_runbook_task_name_only(mock_client_manager):
     }
 
     # Call the function
-    result = await tasks.update_runbook_task.fn(runbook_id="rb123", task_id="task123", name="Updated Task Name")
+    result = await tasks.update_runbook_task(runbook_id="rb123", task_id="task123", name="Updated Task Name")
 
     # Verify the API call
     mock_client_manager.request.assert_called_once_with(
@@ -333,7 +333,7 @@ async def test_update_runbook_task_with_predecessors(mock_client_manager):
     }
 
     # Call the function
-    await tasks.update_runbook_task.fn(runbook_id="rb123", task_id="task123", predecessors=["pred1", "pred2"])
+    await tasks.update_runbook_task(runbook_id="rb123", task_id="task123", predecessors=["pred1", "pred2"])
 
     # Verify the API call
     mock_client_manager.request.assert_called_once_with(
@@ -368,7 +368,7 @@ async def test_update_runbook_task_with_duration(mock_client_manager):
     }
 
     # Call the function
-    await tasks.update_runbook_task.fn(runbook_id="rb123", task_id="task123", duration=7200)
+    await tasks.update_runbook_task(runbook_id="rb123", task_id="task123", duration=7200)
 
     # Verify duration is included in the payload
     mock_client_manager.request.assert_called_once_with(
@@ -398,7 +398,7 @@ async def test_update_runbook_task_with_custom_field_values(mock_client_manager)
     ]
 
     # Call the function
-    await tasks.update_runbook_task.fn(runbook_id="rb123", task_id="task123", custom_field_values=custom_fields)
+    await tasks.update_runbook_task(runbook_id="rb123", task_id="task123", custom_field_values=custom_fields)
 
     # Verify custom_field_values is included in the payload
     mock_client_manager.request.assert_called_once_with(
@@ -438,7 +438,7 @@ async def test_update_runbook_task_all_params(mock_client_manager):
     custom_fields = [{"name": "Status", "value": "Ready"}]
 
     # Call the function with all params
-    await tasks.update_runbook_task.fn(
+    await tasks.update_runbook_task(
         runbook_id="rb123",
         task_id="task123",
         name="Fully Updated Task",
@@ -488,7 +488,7 @@ async def test_update_runbook_task_with_task_links(mock_client_manager):
         }
     }
 
-    result = await tasks.update_runbook_task.fn(
+    result = await tasks.update_runbook_task(
         runbook_id="rb123",
         task_id="task123",
         task_links=[TaskLink(id="555", link_type="runbook")],
@@ -515,7 +515,7 @@ async def test_update_runbook_task_clear_task_links(mock_client_manager):
         "data": {"id": "task123", "type": "task", "attributes": {"name": "Task"}}
     }
 
-    await tasks.update_runbook_task.fn(runbook_id="rb123", task_id="task123", task_links=[])
+    await tasks.update_runbook_task(runbook_id="rb123", task_id="task123", task_links=[])
 
     mock_client_manager.request.assert_called_once_with(
         "PATCH",
@@ -539,7 +539,7 @@ async def test_update_runbook_task_with_assignees(mock_client_manager):
 
     assignees = [Assignee(id="user1", type="user"), Assignee(id="team1", type="runbook_team")]
 
-    await tasks.update_runbook_task.fn(runbook_id="rb123", task_id="task123", assignees=assignees)
+    await tasks.update_runbook_task(runbook_id="rb123", task_id="task123", assignees=assignees)
 
     mock_client_manager.request.assert_called_once_with(
         "PATCH",
@@ -567,7 +567,7 @@ async def test_update_runbook_task_with_assignees_replace(mock_client_manager):
 
     assignees = [Assignee(id="user2", type="user")]
 
-    await tasks.update_runbook_task.fn(
+    await tasks.update_runbook_task(
         runbook_id="rb123",
         task_id="task123",
         assignees=assignees,
@@ -607,7 +607,7 @@ async def test_start_task(mock_client_manager):
     }
 
     # Call the function
-    result = await tasks.start_task.fn(runbook_id="rb123", task_id="task123")
+    result = await tasks.start_task(runbook_id="rb123", task_id="task123")
 
     # Verify the API call
     mock_client_manager.request.assert_called_once_with("PATCH", "core/runbooks/rb123/tasks/task123/start")
@@ -632,7 +632,7 @@ async def test_complete_task(mock_client_manager):
     }
 
     # Call the function
-    result = await tasks.complete_task.fn(runbook_id="rb123", task_id="task123")
+    result = await tasks.complete_task(runbook_id="rb123", task_id="task123")
 
     # Verify the API call
     mock_client_manager.request.assert_called_once_with("PATCH", "core/runbooks/rb123/tasks/task123/finish")
@@ -657,7 +657,7 @@ async def test_skip_task(mock_client_manager):
     }
 
     # Call the function
-    result = await tasks.skip_task.fn(runbook_id="rb123", task_id="task123")
+    result = await tasks.skip_task(runbook_id="rb123", task_id="task123")
 
     # Verify the API call
     mock_client_manager.request.assert_called_once_with("PATCH", "core/runbooks/rb123/tasks/task123/skip")
@@ -680,7 +680,7 @@ async def test_task_error_handling(mock_client_manager):
 
     # Should raise the exception
     with pytest.raises(httpx.HTTPStatusError) as exc_info:
-        await tasks.start_task.fn("rb123", "invalid-task")
+        await tasks.start_task("rb123", "invalid-task")
 
     assert exc_info.value.response.status_code == 404
 
@@ -693,7 +693,7 @@ async def test_delete_task(mock_client_manager):
     """Test deleting a single task."""
     mock_client_manager.request.return_value = {}
 
-    result = await tasks.delete_task.fn(runbook_id="rb123", task_id="task123")
+    result = await tasks.delete_task(runbook_id="rb123", task_id="task123")
 
     mock_client_manager.request.assert_called_once_with("DELETE", "core/runbooks/rb123/tasks/task123")
     assert result == {}
@@ -713,6 +713,6 @@ async def test_delete_task_not_found(mock_client_manager):
     )
 
     with pytest.raises(httpx.HTTPStatusError) as exc_info:
-        await tasks.delete_task.fn(runbook_id="rb123", task_id="nonexistent")
+        await tasks.delete_task(runbook_id="rb123", task_id="nonexistent")
 
     assert exc_info.value.response.status_code == 404

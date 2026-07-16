@@ -51,7 +51,7 @@ async def test_list_runbook_types(mock_client_manager):
         "links": {"self": "core/runbook_types", "first": "core/runbook_types", "last": None, "prev": None, "next": None},
     }
 
-    result = await runbook_types.list_runbook_types.fn()
+    result = await runbook_types.list_runbook_types()
 
     mock_client_manager.request.assert_called_once_with("GET", "core/runbook_types")
     assert len(result.data) == 2
@@ -92,7 +92,7 @@ async def test_list_runbook_types_pagination(mock_client_manager):
         },
     ]
 
-    result = await runbook_types.list_runbook_types.fn()
+    result = await runbook_types.list_runbook_types()
 
     assert mock_client_manager.request.call_count == 2
     calls = mock_client_manager.request.call_args_list

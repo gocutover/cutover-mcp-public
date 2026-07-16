@@ -35,7 +35,7 @@ async def test_get_runbook_teams_basic(mock_client_manager):
     }
 
     # Call the function
-    result = await teams.get_runbook_teams.fn(runbook_id="rb-123")
+    result = await teams.get_runbook_teams(runbook_id="rb-123")
 
     # Verify the API call
     mock_client_manager.request.assert_called_once_with("GET", "core/runbooks/rb-123/runbook_teams")
@@ -83,7 +83,7 @@ async def test_get_runbook_teams_with_pagination(mock_client_manager):
     ]
 
     # Call the function
-    result = await teams.get_runbook_teams.fn(runbook_id="rb-123")
+    result = await teams.get_runbook_teams(runbook_id="rb-123")
 
     # Verify both pages were fetched
     assert mock_client_manager.request.call_count == 2
@@ -110,7 +110,7 @@ async def test_get_runbook_teams_missing_team_relationship(mock_client_manager):
     }
 
     # Call the function
-    result = await teams.get_runbook_teams.fn(runbook_id="rb-123")
+    result = await teams.get_runbook_teams(runbook_id="rb-123")
 
     # Verify team_id is None when relationship is missing
     assert result[0]["team_id"] is None
@@ -124,7 +124,7 @@ async def test_get_runbook_teams_empty(mock_client_manager):
     mock_client_manager.request.return_value = {"data": [], "links": {}}
 
     # Call the function
-    result = await teams.get_runbook_teams.fn(runbook_id="rb-no-teams")
+    result = await teams.get_runbook_teams(runbook_id="rb-no-teams")
 
     # Verify the result is empty
     assert result == []
@@ -146,6 +146,6 @@ async def test_get_runbook_teams_error_handling(mock_client_manager):
 
     # Should raise the exception
     with pytest.raises(httpx.HTTPStatusError) as exc_info:
-        await teams.get_runbook_teams.fn(runbook_id="nonexistent")
+        await teams.get_runbook_teams(runbook_id="nonexistent")
 
     assert exc_info.value.response.status_code == 404

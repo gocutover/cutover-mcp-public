@@ -34,7 +34,7 @@ async def test_list_streams_without_forecast(mock_client_manager):
     }
 
     # Call the function
-    result = await streams.list_streams.fn(runbook_id="rb123")
+    result = await streams.list_streams(runbook_id="rb123")
 
     # Verify the API call
     mock_client_manager.request.assert_called_once_with("GET", "core/runbooks/rb123/streams", params={})
@@ -66,7 +66,7 @@ async def test_list_streams_with_forecast(mock_client_manager):
     }
 
     # Call the function with forecast
-    result = await streams.list_streams.fn(runbook_id="rb123", forecast=True)
+    result = await streams.list_streams(runbook_id="rb123", forecast=True)
 
     # Verify the API call includes forecast parameter
     mock_client_manager.request.assert_called_once_with(
@@ -94,7 +94,7 @@ async def test_create_stream_minimal(mock_client_manager):
     }
 
     # Call the function
-    result = await streams.create_stream.fn(runbook_id="rb123", name="New Stream")
+    result = await streams.create_stream(runbook_id="rb123", name="New Stream")
 
     # Verify the API call
     mock_client_manager.request.assert_called_once_with(
@@ -130,7 +130,7 @@ async def test_create_stream_with_color_and_description(mock_client_manager):
     }
 
     # Call the function
-    result = await streams.create_stream.fn(
+    result = await streams.create_stream(
         runbook_id="rb123",
         name="Colored Stream",
         description="A stream with color",
@@ -174,7 +174,7 @@ async def test_create_substream(mock_client_manager):
     }
 
     # Call the function with parent
-    result = await streams.create_stream.fn(runbook_id="rb123", name="Substream", parent_stream_id="parent-stream")
+    result = await streams.create_stream(runbook_id="rb123", name="Substream", parent_stream_id="parent-stream")
 
     # Verify the API call includes parent relationship
     mock_client_manager.request.assert_called_once_with(
@@ -210,7 +210,7 @@ async def test_get_stream(mock_client_manager):
     }
 
     # Call the function
-    result = await streams.get_stream.fn(runbook_id="rb123", stream_id="stream123")
+    result = await streams.get_stream(runbook_id="rb123", stream_id="stream123")
 
     # Verify the API call
     mock_client_manager.request.assert_called_once_with("GET", "core/runbooks/rb123/streams/stream123")
@@ -236,7 +236,7 @@ async def test_update_stream_name_only(mock_client_manager):
     }
 
     # Call the function
-    result = await streams.update_stream.fn(runbook_id="rb123", stream_id="stream123", name="Updated Name")
+    result = await streams.update_stream(runbook_id="rb123", stream_id="stream123", name="Updated Name")
 
     # Verify the API call
     mock_client_manager.request.assert_called_once_with(
@@ -272,7 +272,7 @@ async def test_update_stream_all_fields(mock_client_manager):
     }
 
     # Call the function with all params
-    result = await streams.update_stream.fn(
+    result = await streams.update_stream(
         runbook_id="rb123",
         stream_id="stream123",
         name="Fully Updated",
@@ -310,7 +310,7 @@ async def test_delete_stream(mock_client_manager):
     mock_client_manager.request.return_value = {}
 
     # Call the function
-    result = await streams.delete_stream.fn(runbook_id="rb123", stream_id="stream123")
+    result = await streams.delete_stream(runbook_id="rb123", stream_id="stream123")
 
     # Verify the API call
     mock_client_manager.request.assert_called_once_with("DELETE", "core/runbooks/rb123/streams/stream123")
@@ -337,7 +337,7 @@ async def test_stream_not_found_error(mock_client_manager):
 
     # Should raise the exception
     with pytest.raises(httpx.HTTPStatusError) as exc_info:
-        await streams.get_stream.fn("rb123", "invalid-stream")
+        await streams.get_stream("rb123", "invalid-stream")
 
     assert exc_info.value.response.status_code == 404
 
@@ -349,7 +349,7 @@ async def test_empty_stream_list(mock_client_manager):
     mock_client_manager.request.return_value = {"data": [], "meta": {"page": {"number": 1}}, "links": {}}
 
     # Call the function
-    result = await streams.list_streams.fn(runbook_id="rb123")
+    result = await streams.list_streams(runbook_id="rb123")
 
     # Verify the result
     assert len(result.data) == 0
