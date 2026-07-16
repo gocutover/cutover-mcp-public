@@ -11,7 +11,7 @@ dependencies = [
     "python-dotenv>=1.2.2",
     "mcp[cli]>=1.28.1",
     "typer[rich]>=0.26.8; extra == 'rich'",
-    "fastmcp>=3.2.0",
+    "fastmcp>=3.4.4",
 ]
 
 [project.optional-dependencies]
