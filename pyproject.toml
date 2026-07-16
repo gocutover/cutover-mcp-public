@@ -10,7 +10,7 @@ dependencies = [
     "pydantic>=2.13.4",
     "python-dotenv>=1.2.2",
     "mcp[cli]>=1.10.1",
-    "typer[rich]>=0.12.3; extra == 'rich'",
+    "typer[rich]>=0.26.8; extra == 'rich'",
     "fastmcp>=3.2.0",
 ]
 
