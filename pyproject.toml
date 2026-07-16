@@ -21,7 +21,7 @@ dev = [
     "pytest-cov>=6.0.0",
     "pytest-watcher>=0.6.3",
     "respx>=0.21.0",
-    "ruff>=0.8.0",
+    "ruff>=0.15.20",
     "pre-commit>=4.6.0",
 ]
 
