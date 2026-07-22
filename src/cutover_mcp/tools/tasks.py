@@ -184,17 +184,20 @@ async def complete_task(runbook_id: str, task_id: str) -> TaskResponse:
 
 
 @mcp.tool()
-async def skip_task(runbook_id: str, task_id: str) -> TaskResponse:
+async def skip_task(runbook_id: str, task_id: str, comment: str) -> dict[str, Any]:
     """
     Skip a specific task in a runbook.
 
     :param runbook_id: The ID of the runbook containing the task.
     :param task_id: The ID of the task to skip.
-    :return: A TaskResponse object representing the skipped task.
+    :param comment: The reason for skipping the task. Required by the API and added as a
+        comment on the runbook.
+    :return: An acknowledgement dictionary. Unlike start/complete, the skip endpoint does
+        not return the task object.
     """
     client = client_mgr.get_client()
-    response = await client.request("PATCH", f"core/runbooks/{runbook_id}/tasks/{task_id}/skip")
-    return TaskResponse(**response)
+    payload = {"meta": {"comment": comment}}
+    return await client.request("PATCH", f"core/runbooks/{runbook_id}/tasks/{task_id}/skip", json_data=payload)
 
 
 @mcp.tool()

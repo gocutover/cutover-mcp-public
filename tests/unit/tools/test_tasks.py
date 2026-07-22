@@ -643,27 +643,22 @@ async def test_complete_task(mock_client_manager):
 
 @pytest.mark.asyncio
 async def test_skip_task(mock_client_manager):
-    """Test skipping a task."""
-    # Set up mock response
-    mock_client_manager.request.return_value = {
-        "data": {
-            "id": "task123",
-            "type": "task",
-            "attributes": {
-                "name": "Skipped Task",
-                "stage": "complete",
-            },
-        }
-    }
+    """Test skipping a task sends the required comment and accepts a no-data acknowledgement."""
+    # The skip endpoint returns an acknowledgement without a task payload
+    mock_client_manager.request.return_value = {}
 
     # Call the function
-    result = await tasks.skip_task(runbook_id="rb123", task_id="task123")
+    result = await tasks.skip_task(runbook_id="rb123", task_id="task123", comment="No longer needed")
 
-    # Verify the API call
-    mock_client_manager.request.assert_called_once_with("PATCH", "core/runbooks/rb123/tasks/task123/skip")
+    # Verify the API call forwards the comment as meta.comment
+    mock_client_manager.request.assert_called_once_with(
+        "PATCH",
+        "core/runbooks/rb123/tasks/task123/skip",
+        json_data={"meta": {"comment": "No longer needed"}},
+    )
 
-    # Verify the result
-    assert result.data.id == "task123"
+    # A no-data acknowledgement is treated as success
+    assert result == {}
 
 
 @pytest.mark.asyncio
