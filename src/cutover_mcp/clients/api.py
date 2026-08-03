@@ -8,6 +8,58 @@ import httpx
 logger = logging.getLogger(__name__)
 
 
+class CutoverAPIError(Exception):
+    """Raised for Cutover API failures that should be surfaced to the caller as a
+    structured, user-facing error rather than retried as a transient fault.
+
+    ``messages`` carries the parsed user-facing error strings from the response
+    body so callers (e.g. AI tools) can surface them to the user instead of the
+    generic ``Client error 'XXX ...' for url '...'`` message emitted by
+    ``httpx.HTTPStatusError``.
+    """
+
+    def __init__(self, status_code: int, url: str, messages: list[str], raw_body: str = ""):
+        self.status_code = status_code
+        self.url = url
+        self.messages = messages
+        self.raw_body = raw_body
+        detail = "; ".join(messages) if messages else raw_body or f"HTTP {status_code}"
+        super().__init__(detail)
+
+
+def _parse_error_messages(response: httpx.Response) -> list[str]:
+    """Best-effort extraction of user-facing error strings from a Cutover/public API
+    response body. Supports both the common ``{"errors": [...]}`` shape and
+    JSON:API-style ``{"errors": [{"title": ..., "detail": ...}]}``.
+    """
+    try:
+        payload = response.json()
+    except (ValueError, httpx.DecodingError):
+        return []
+
+    if not isinstance(payload, dict):
+        return []
+
+    errors = payload.get("errors") or payload.get("error")
+    if errors is None:
+        detail = payload.get("detail") or payload.get("message")
+        return [str(detail)] if detail else []
+
+    if isinstance(errors, str):
+        return [errors]
+
+    if isinstance(errors, list):
+        messages: list[str] = []
+        for item in errors:
+            if isinstance(item, str):
+                messages.append(item)
+            elif isinstance(item, dict):
+                messages.append(str(item.get("detail") or item.get("title") or item.get("message") or item))
+        return messages
+
+    return []
+
+
 class APIClient:
     """
     A thin convenience wrapper around one shared httpx.AsyncClient.
@@ -72,6 +124,14 @@ class APIClient:
                     and 400 <= e.response.status_code < 500
                     and e.response.status_code != 429
                 ):
+                    if isinstance(e, httpx.HTTPStatusError) and 400 <= e.response.status_code < 500:
+                        logger.warning("API client error for %s: %s", url, e.response.text)
+                        raise CutoverAPIError(
+                            status_code=e.response.status_code,
+                            url=url,
+                            messages=_parse_error_messages(e.response),
+                            raw_body=e.response.text,
+                        ) from e
                     logger.error("API request failed for %s: %s", url, e)
                     raise
                 delay = 2**attempt
