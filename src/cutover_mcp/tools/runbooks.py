@@ -1,9 +1,9 @@
-from typing import Any
+from typing import Any, Literal
+from urllib.parse import urlencode
 
 from cutover_mcp.app import mcp
 from cutover_mcp.clients.api import client_mgr
 from cutover_mcp.models import RunbookListResponse, RunbookResponse, TaskListResponse, inject_return_schema
-from urllib.parse import urlencode
 
 
 @mcp.tool()
@@ -332,13 +332,13 @@ async def create_runbook(
 @mcp.tool()
 async def manage_runbook(
     runbook_id: str,
-    action: str,
-    comms: str | None = None,
+    action: Literal["start", "cancel", "pause", "resume"],
+    comms: Literal["off", "test", "on"] = "off",
     disable_task_notify: bool | None = False,
-    run_type: str | None = None,
+    run_type: Literal["live", "rehearsal"] = "rehearsal",
     rebaseline: bool | None = False,
     shift_fixed_times: bool | None = False,
-    validation_level: str | None = "error",
+    validation_level: Literal["warning", "error"] | None = "error",
     message: str | None = None,
     notify: bool | None = False,
 ) -> dict[str, Any]:
@@ -348,9 +348,11 @@ async def manage_runbook(
 
     :param runbook_id: The unique identifier for the runbook.
     :param action: The action to perform (start, cancel, pause, resume).
-    :param comms: Communication mode (off, test, on) (for start).
+    :param comms: Communication mode (off, test, on) (for start). Required by the platform;
+        defaults to "off" so a start does not send communications unless asked to.
     :param disable_task_notify: Disable task start notifications (for start).
-    :param run_type: Type of run (live, rehearsal) (for start).
+    :param run_type: Type of run (live, rehearsal) (for start). Required by the platform;
+        defaults to "rehearsal" — pass "live" explicitly to start a live run.
     :param rebaseline: Recalculate all planned times based on the current time (for start).
     :param shift_fixed_times: Shift tasks with fixed times relative to the current time (for start).
     :param validation_level: Validation level (warning, error) (for start).

@@ -644,6 +644,32 @@ async def test_manage_runbook_start(mock_client_manager):
 
 
 @pytest.mark.asyncio
+async def test_manage_runbook_start_defaults(mock_client_manager):
+    """A bare start must still send comms and run_type — Core requires both (AI-485)."""
+    mock_client_manager.request.return_value = {"status": "started"}
+
+    result = await runbooks.manage_runbook(runbook_id="rb123", action="start")
+
+    # comms and run_type must not be stripped from the payload
+    mock_client_manager.request.assert_called_once_with(
+        "PATCH",
+        "core/runbooks/rb123/start",
+        json_data={
+            "meta": {
+                "comms": "off",
+                "disable_task_notify": False,
+                "run_type": "rehearsal",
+                "rebaseline": False,
+                "shift_fixed_times": False,
+                "validation_level": "error",
+            }
+        },
+    )
+
+    assert result["status"] == "started"
+
+
+@pytest.mark.asyncio
 async def test_manage_runbook_cancel(mock_client_manager):
     """Test cancelling a runbook."""
     # Set up mock response
@@ -718,6 +744,24 @@ async def test_manage_runbook_invalid_action(mock_client_manager):
     with pytest.raises(ValueError, match="Invalid action: invalid"):
         await runbooks.manage_runbook(runbook_id="rb123", action="invalid")
     mock_client_manager.request.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_manage_runbook_schema_enums():
+    """The tool schema must advertise allowed values so callers can't guess invalid ones."""
+    from cutover_mcp.app import mcp
+
+    tool = await mcp.get_tool("manage_runbook")
+    props = tool.parameters["properties"]
+
+    assert props["action"]["enum"] == ["start", "cancel", "pause", "resume"]
+    assert props["comms"]["enum"] == ["off", "test", "on"]
+    assert props["comms"]["default"] == "off"
+    assert props["run_type"]["enum"] == ["live", "rehearsal"]
+    assert props["run_type"]["default"] == "rehearsal"
+    # validation_level is nullable, so its enum sits inside an anyOf branch
+    enum_branches = [b for b in props["validation_level"]["anyOf"] if "enum" in b]
+    assert enum_branches[0]["enum"] == ["warning", "error"]
 
 
 @pytest.mark.asyncio
