@@ -20,7 +20,7 @@ async def test_list_custom_fields_no_filter(mock_client_manager):
                     "field_type": "single_select",
                     "field_options": ["High", "Medium", "Low"],
                     "required": True,
-                    "apply_to": "task",
+                    "apply_to": "task_edit",
                     "allow_field_creation": False,
                     "default_value": "Medium",
                     "display_name": "Task Priority",
@@ -34,7 +34,7 @@ async def test_list_custom_fields_no_filter(mock_client_manager):
                     "field_type": "multi_select",
                     "field_options": ["EU", "US", "APAC"],
                     "required": False,
-                    "apply_to": "runbook",
+                    "apply_to": "runbook_edit",
                     "allow_field_creation": True,
                     "default_value": None,
                     "display_name": "Region",
@@ -56,7 +56,7 @@ async def test_list_custom_fields_no_filter(mock_client_manager):
     assert result[0]["field_type"] == "single_select"
     assert result[0]["field_options"] == ["High", "Medium", "Low"]
     assert result[0]["required"] is True
-    assert result[0]["apply_to"] == "task"
+    assert result[0]["apply_to"] == "task_edit"
     assert result[0]["default_value"] == "Medium"
     assert result[0]["display_name"] == "Task Priority"
     assert result[1]["id"] == "cf-2"
@@ -83,8 +83,121 @@ async def test_list_custom_fields_with_workspace_filter(mock_client_manager):
     # Call the function
     await custom_fields.list_custom_fields(workspace_id="ws-123")
 
-    # Verify the API call includes workspace filter
-    mock_client_manager.request.assert_called_once_with("GET", "core/custom_fields", params={"workspace_id": "ws-123"})
+    # Verify the API call includes the workspace filter plus global fields by default
+    mock_client_manager.request.assert_called_once_with(
+        "GET", "core/custom_fields", params={"workspace_id": "ws-123", "global": "true"}
+    )
+
+
+@pytest.mark.asyncio
+async def test_list_custom_fields_workspace_filter_without_global(mock_client_manager):
+    """Test listing workspace custom fields with global fields excluded."""
+    mock_client_manager.request.return_value = {"data": []}
+
+    await custom_fields.list_custom_fields(workspace_id="ws-123", include_global=False)
+
+    mock_client_manager.request.assert_called_once_with(
+        "GET", "core/custom_fields", params={"workspace_id": "ws-123", "global": "false"}
+    )
+
+
+@pytest.mark.asyncio
+async def test_list_custom_fields_scope_filtering(mock_client_manager):
+    """Test that scope narrows results to task-level or runbook-level fields."""
+    mock_client_manager.request.return_value = {
+        "data": [
+            {
+                "id": "cf-task",
+                "type": "custom_field",
+                "attributes": {"name": "Task Field", "apply_to": "task_edit"},
+            },
+            {
+                "id": "cf-runbook",
+                "type": "custom_field",
+                "attributes": {"name": "Runbook Field", "apply_to": "runbook_edit"},
+            },
+        ],
+    }
+
+    result = await custom_fields.list_custom_fields(scope="task")
+    assert [field["id"] for field in result] == ["cf-task"]
+
+    result = await custom_fields.list_custom_fields(scope="runbook")
+    assert [field["id"] for field in result] == ["cf-runbook"]
+
+    result = await custom_fields.list_custom_fields(scope="all")
+    assert [field["id"] for field in result] == ["cf-task", "cf-runbook"]
+
+
+@pytest.mark.asyncio
+async def test_list_custom_fields_nests_dependent_children(mock_client_manager):
+    """Dependent child fields are nested under their parent and omitted from the top level."""
+    mock_client_manager.request.return_value = {
+        "data": [
+            {
+                "id": "400",
+                "type": "custom_field",
+                "attributes": {
+                    "name": "Applications",
+                    "apply_to": "runbook_edit",
+                    "field_type": "multi_searchable",
+                },
+                "relationships": {
+                    "dependent_custom_fields": {
+                        "data": [
+                            {"id": "401", "type": "custom_field"},
+                            {"id": "402", "type": "custom_field"},
+                        ]
+                    }
+                },
+            },
+            {
+                "id": "401",
+                "type": "custom_field",
+                "attributes": {
+                    "name": "Applications:: app_name",
+                    "display_name": "app_name",
+                    "apply_to": "runbook_edit",
+                    "field_type": "text",
+                },
+                "relationships": {},
+            },
+            {
+                "id": "402",
+                "type": "custom_field",
+                "attributes": {
+                    "name": "Applications:: category",
+                    "display_name": "category",
+                    "apply_to": "runbook_edit",
+                    "field_type": "text",
+                },
+                "relationships": {},
+            },
+            {
+                "id": "88",
+                "type": "custom_field",
+                "attributes": {
+                    "name": "Animal",
+                    "apply_to": "task_edit",
+                    "field_type": "searchable",
+                },
+                "relationships": {"dependent_custom_fields": {"data": []}},
+            },
+        ],
+    }
+
+    result = await custom_fields.list_custom_fields()
+
+    # Children 401/402 are not top-level; parent + standalone remain.
+    assert [field["id"] for field in result] == ["400", "88"]
+
+    parent = next(field for field in result if field["id"] == "400")
+    assert [child["id"] for child in parent["dependent_fields"]] == ["401", "402"]
+    assert [child["display_name"] for child in parent["dependent_fields"]] == ["app_name", "category"]
+
+    # A field with no dependents does not get a dependent_fields key.
+    animal = next(field for field in result if field["id"] == "88")
+    assert "dependent_fields" not in animal
 
 
 @pytest.mark.asyncio
@@ -196,7 +309,7 @@ async def test_get_custom_field(mock_client_manager):
                 "field_type": "single_select",
                 "field_options": ["Production", "Staging", "Dev"],
                 "required": True,
-                "apply_to": "runbook",
+                "apply_to": "runbook_edit",
                 "allow_field_creation": False,
                 "default_value": "Dev",
                 "display_name": "Environment",
@@ -216,7 +329,7 @@ async def test_get_custom_field(mock_client_manager):
     assert result["field_type"] == "single_select"
     assert result["field_options"] == ["Production", "Staging", "Dev"]
     assert result["required"] is True
-    assert result["apply_to"] == "runbook"
+    assert result["apply_to"] == "runbook_edit"
     assert result["allow_field_creation"] is False
     assert result["default_value"] == "Dev"
     assert result["display_name"] == "Environment"
