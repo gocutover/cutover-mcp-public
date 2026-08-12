@@ -609,6 +609,134 @@ async def test_create_runbook_with_folder_id(mock_client_manager):
 
 
 @pytest.mark.asyncio
+async def test_create_runbook_from_template_minimal(mock_client_manager):
+    """copy_source_runbook_id alone omits workspace and defaults to a full clone."""
+    mock_client_manager.request.return_value = {
+        "data": {
+            "id": "copy-rb",
+            "type": "runbook",
+            "attributes": {"name": "Copied Runbook", "description": ""},
+            "relationships": {},
+        }
+    }
+
+    result = await runbooks.create_runbook(
+        name="Copied Runbook",
+        copy_source_runbook_id="tmpl-1",
+    )
+
+    mock_client_manager.request.assert_called_once_with(
+        "POST",
+        "core/runbooks",
+        json_data={
+            "data": {
+                "type": "runbook",
+                "attributes": {"name": "Copied Runbook", "description": ""},
+            },
+            "meta": {
+                "copy": {
+                    "source_runbook_id": "tmpl-1",
+                    "tasks": True,
+                    "teams": True,
+                    "users": True,
+                }
+            },
+        },
+    )
+
+    assert result.data.id == "copy-rb"
+
+
+@pytest.mark.asyncio
+async def test_create_runbook_from_template_full_params(mock_client_manager):
+    """Copy flags and shift_fixed_times are all forwarded in the meta block."""
+    mock_client_manager.request.return_value = {
+        "data": {
+            "id": "copy-rb-2",
+            "type": "runbook",
+            "attributes": {"name": "Copied Runbook", "description": ""},
+            "relationships": {"workspace": {"data": {"id": "ws123", "type": "workspace"}}},
+        }
+    }
+
+    await runbooks.create_runbook(
+        workspace_id="ws123",
+        name="Copied Runbook",
+        copy_source_runbook_id="tmpl-1",
+        copy_tasks=True,
+        copy_teams=True,
+        copy_users=True,
+        shift_fixed_times=True,
+    )
+
+    mock_client_manager.request.assert_called_once_with(
+        "POST",
+        "core/runbooks",
+        json_data={
+            "data": {
+                "type": "runbook",
+                "attributes": {"name": "Copied Runbook", "description": ""},
+                "relationships": {"workspace": {"data": {"type": "workspace", "id": "ws123"}}},
+            },
+            "meta": {
+                "copy": {
+                    "source_runbook_id": "tmpl-1",
+                    "tasks": True,
+                    "teams": True,
+                    "users": True,
+                },
+                "shift_fixed_times": True,
+            },
+        },
+    )
+
+
+@pytest.mark.asyncio
+async def test_create_runbook_from_template_explicit_exclude(mock_client_manager):
+    """An explicit False is respected and not overridden by the full-clone default."""
+    mock_client_manager.request.return_value = {
+        "data": {
+            "id": "copy-rb-3",
+            "type": "runbook",
+            "attributes": {"name": "Copied Runbook", "description": ""},
+            "relationships": {},
+        }
+    }
+
+    await runbooks.create_runbook(
+        name="Copied Runbook",
+        copy_source_runbook_id="tmpl-1",
+        copy_users=False,
+    )
+
+    _, kwargs = mock_client_manager.request.call_args
+    assert kwargs["json_data"]["meta"]["copy"] == {
+        "source_runbook_id": "tmpl-1",
+        "tasks": True,
+        "teams": True,
+        "users": False,
+    }
+
+
+@pytest.mark.asyncio
+async def test_create_runbook_without_copy_omits_meta(mock_client_manager):
+    """When not copying, no meta key is sent at all."""
+    mock_client_manager.request.return_value = {
+        "data": {
+            "id": "plain-rb",
+            "type": "runbook",
+            "attributes": {"name": "Plain Runbook", "description": ""},
+            "relationships": {"workspace": {"data": {"id": "ws123", "type": "workspace"}}},
+        }
+    }
+
+    await runbooks.create_runbook(workspace_id="ws123", name="Plain Runbook")
+
+    _, kwargs = mock_client_manager.request.call_args
+    assert "meta" not in kwargs["json_data"]
+
+
+@pytest.mark.asyncio
 async def test_manage_runbook_start(mock_client_manager):
     """Test starting a runbook."""
     # Set up mock response

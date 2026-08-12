@@ -264,8 +264,8 @@ async def update_runbook(
 
 @mcp.tool()
 async def create_runbook(
-    workspace_id: str,
     name: str,
+    workspace_id: str | None = None,
     description: str = "",
     status: str | None = None,
     is_template: bool | None = None,
@@ -276,12 +276,18 @@ async def create_runbook(
     rto_start_task: str | None = None,
     runbook_type_id: str | None = None,
     folder_id: str | None = None,
+    copy_source_runbook_id: str | None = None,
+    copy_tasks: bool | None = None,
+    copy_teams: bool | None = None,
+    copy_users: bool | None = None,
+    shift_fixed_times: bool | None = None,
 ) -> RunbookResponse:
     """
-    Create a new runbook in a workspace.
+    Create a new runbook in a workspace, or as a copy of an existing runbook/template.
 
-    :param workspace_id: The ID of the workspace to create the runbook in (required, relationship field).
     :param name: The name of the new runbook.
+    :param workspace_id: The ID of the workspace to create the runbook in (relationship field).
+        Required unless copy_source_runbook_id is passed.
     :param description: An optional description for the runbook.
     :param status: The new RAG status for the runbook (Allowed: off, red, amber, green).
     :param is_template: Whether the runbook is a template (optional, true/false).
@@ -293,6 +299,15 @@ async def create_runbook(
     :param rto_end_task: ID of the end task for RTO/RTA feature (optional, relationship field).
     :param folder_id: ID of the folder to place the new runbook in (optional, relationship field).
         If omitted, the runbook lands in the workspace's default location.
+    :param copy_source_runbook_id: ID of an existing runbook/template to copy from. When set, this
+        runbook is created as a copy and workspace_id may be omitted. The copy flags below all default
+        to a full clone; only set one to False when the user asks to exclude that part.
+    :param copy_tasks: Whether to copy the source's tasks. Defaults to True.
+    :param copy_teams: Whether to copy the source's teams. Defaults to True. Teams are copied without
+        their members unless copy_users is also True, so keep teams and users together.
+    :param copy_users: Whether to copy the source's users. Defaults to True.
+    :param shift_fixed_times: When copying, whether start_fixed/end_fixed task attributes should be
+        recalculated relative to the new runbook's start.
     :return: A RunbookResponse object representing the newly created runbook.
     """
     client = client_mgr.get_client()
@@ -308,7 +323,9 @@ async def create_runbook(
     if timezone is not None:
         attributes["timezone"] = timezone
 
-    relationships = {"workspace": {"data": {"type": "workspace", "id": workspace_id}}}
+    relationships = {}
+    if workspace_id is not None:
+        relationships["workspace"] = {"data": {"type": "workspace", "id": workspace_id}}
     if runbook_type_id is not None:
         relationships["runbook_type"] = {"data": {"type": "runbook_type", "id": runbook_type_id}}
     if rto_start_task is not None:
@@ -318,13 +335,29 @@ async def create_runbook(
     if folder_id is not None:
         relationships["folder"] = {"data": {"type": "folder", "id": folder_id}}
 
-    payload = {
+    payload: dict[str, Any] = {
         "data": {
             "type": "runbook",
             "attributes": attributes,
-            "relationships": relationships,
         }
     }
+    if relationships:
+        payload["data"]["relationships"] = relationships
+
+    meta: dict[str, Any] = {}
+    if copy_source_runbook_id is not None:
+        # Default to a full clone when the caller doesn't specify. The API flags default to
+        meta["copy"] = {
+            "source_runbook_id": copy_source_runbook_id,
+            "tasks": copy_tasks if copy_tasks is not None else True,
+            "teams": copy_teams if copy_teams is not None else True,
+            "users": copy_users if copy_users is not None else True,
+        }
+    if shift_fixed_times is not None:
+        meta["shift_fixed_times"] = shift_fixed_times
+    if meta:
+        payload["meta"] = meta
+
     response = await client.request("POST", "core/runbooks", json_data=payload)
     return RunbookResponse(**response)
 
