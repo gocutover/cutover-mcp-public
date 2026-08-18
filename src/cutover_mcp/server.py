@@ -12,6 +12,7 @@ from cutover_mcp.app import mcp
 from cutover_mcp.tools import (  # noqa: F401
     action_log,
     activities,
+    comments,
     custom_fields,
     runbook_types,
     folders,

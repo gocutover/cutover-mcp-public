@@ -6,7 +6,7 @@ from typing import Any, Generic, Literal, TypeVar, Union, _GenericAlias, get_arg
 
 from pydantic import BaseModel, Field
 
-# --- 1. Generic JSON:API and Helper Models ---
+# --- Generic JSON:API and Helper Models ---
 
 # Type variables for creating generic models
 AttributesType = TypeVar("AttributesType")
@@ -78,7 +78,7 @@ class JsonApiSingleResponse(BaseModel, Generic[DataType]):
     included: list[JsonApiObject] | None = []
 
 
-# --- 2. Specific Resource Identifier Models ---
+# --- Specific Resource Identifier Models ---
 
 
 class UserIdentifier(JsonApiIdentifier):
@@ -133,7 +133,7 @@ class RunbookVersionIdentifier(JsonApiIdentifier):
     type: Literal["runbook_version"]
 
 
-# --- 3. Action Log Models ---
+# --- Action Log Models ---
 
 
 class ActionLogAttributes(BaseModel):
@@ -158,7 +158,7 @@ ActionLogResponse = JsonApiSingleResponse[ActionLogResource]
 ActionLogListResponse = JsonApiListResponse[ActionLogResource]
 
 
-# --- 4. Task Models ---
+# --- Task Models ---
 
 
 class CustomFieldValue(BaseModel):
@@ -207,7 +207,27 @@ TaskResponse = JsonApiSingleResponse[TaskResource]
 TaskListResponse = JsonApiListResponse[TaskResource]
 
 
-# --- 5. Stream Models ---
+# --- Comment Models ---
+
+
+class CommentAttributes(BaseModel):
+    content: str | None = None
+    featured: bool | None = None
+
+
+class CommentRelationships(BaseModel):
+    task: Relationship[TaskIdentifier] | None = None
+
+
+class CommentResource(JsonApiObject[CommentAttributes, CommentRelationships]):
+    type: Literal["comment"]
+
+
+# Final Comment Response Models
+CommentResponse = JsonApiSingleResponse[CommentResource]
+
+
+# --- Stream Models ---
 
 
 class StreamAttributes(BaseModel):
@@ -244,7 +264,7 @@ StreamResponse = JsonApiSingleResponse[StreamResource]
 StreamListResponse = JsonApiListResponse[StreamResource]
 
 
-# --- 6. Runbook Type Models ---
+# --- Runbook Type Models ---
 
 
 class RunbookTypeAttributes(BaseModel):
@@ -274,7 +294,7 @@ class RunbookTypeResource(JsonApiObject[RunbookTypeAttributes, RunbookTypeRelati
 RunbookTypeListResponse = JsonApiListResponse[RunbookTypeResource]
 
 
-# --- 7. Runbook Models ---
+# --- Runbook Models ---
 
 
 class RunbookAttributes(BaseModel):
@@ -315,7 +335,7 @@ RunbookResponse = JsonApiSingleResponse[RunbookResource]
 RunbookListResponse = JsonApiListResponse[RunbookResource]
 
 
-# --- 7. Folder Models ---
+# --- Folder Models ---
 
 
 class FolderIdentifier(JsonApiIdentifier):
