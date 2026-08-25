@@ -3,7 +3,7 @@ from unittest.mock import AsyncMock
 import httpx
 import pytest
 
-from cutover_mcp.models import Assignee, TaskLink, TaskLinkResponse
+from cutover_mcp.models import Assignee, Recipient, TaskLink, TaskLinkResponse
 from cutover_mcp.tools import tasks
 
 
@@ -280,6 +280,114 @@ async def test_add_task_to_runbook_with_predecessors(mock_client_manager):
                 "attributes": {"name": "Dependent Task", "description": ""},
                 "relationships": {
                     "predecessors": {"data": [{"id": "pred1", "type": "task"}, {"id": "pred2", "type": "task"}]}
+                },
+            }
+        },
+    )
+
+
+@pytest.mark.asyncio
+async def test_add_task_to_runbook_with_comms_params(mock_client_manager):
+    """Test adding a comms task with message and recipients."""
+    mock_client_manager.request.return_value = {
+        "data": {"id": "task-comms", "type": "task", "attributes": {"name": "Email Task", "description": ""}}
+    }
+
+    recipients = [Recipient(id="user1", type="user"), Recipient(id="team1", type="runbook_team")]
+
+    await tasks.add_task_to_runbook(
+        runbook_id="rb123",
+        name="Email Task",
+        message="Please review the change.",
+        recipients=recipients,
+    )
+
+    mock_client_manager.request.assert_called_once_with(
+        "POST",
+        "core/runbooks/rb123/tasks",
+        json_data={
+            "data": {
+                "type": "task",
+                "attributes": {
+                    "name": "Email Task",
+                    "description": "",
+                    "message": "Please review the change.",
+                },
+                "relationships": {
+                    "recipients": {
+                        "data": [{"id": "user1", "type": "user"}, {"id": "team1", "type": "runbook_team"}]
+                    }
+                },
+            }
+        },
+    )
+
+
+@pytest.mark.asyncio
+async def test_add_task_to_runbook_with_assignees_and_custom_field_values(mock_client_manager):
+    """Test adding a task with assignees and custom_field_values."""
+    mock_client_manager.request.return_value = {
+        "data": {"id": "task-assigned", "type": "task", "attributes": {"name": "Assigned Task", "description": ""}}
+    }
+
+    assignees = [Assignee(id="user1", type="user")]
+    custom_field_values = [{"name": "Review", "value": "Pending"}]
+
+    await tasks.add_task_to_runbook(
+        runbook_id="rb123",
+        name="Assigned Task",
+        assignees=assignees,
+        custom_field_values=custom_field_values,
+    )
+
+    mock_client_manager.request.assert_called_once_with(
+        "POST",
+        "core/runbooks/rb123/tasks",
+        json_data={
+            "data": {
+                "type": "task",
+                "attributes": {
+                    "name": "Assigned Task",
+                    "description": "",
+                    "custom_field_values": [{"name": "Review", "value": "Pending"}],
+                },
+                "relationships": {"assignees": {"data": [{"id": "user1", "type": "user"}]}},
+            }
+        },
+    )
+
+
+@pytest.mark.asyncio
+async def test_add_task_to_runbook_with_scheduling_params(mock_client_manager):
+    """Test adding a task with start_fixed/end_fixed/level/auto_start/auto_finish."""
+    mock_client_manager.request.return_value = {
+        "data": {"id": "task-sched", "type": "task", "attributes": {"name": "Scheduled Task", "description": ""}}
+    }
+
+    await tasks.add_task_to_runbook(
+        runbook_id="rb123",
+        name="Scheduled Task",
+        start_fixed="2026-08-01T09:00:00Z",
+        end_fixed="2026-08-01T10:00:00Z",
+        level="level_2",
+        auto_start=True,
+        auto_finish=False,
+    )
+
+    mock_client_manager.request.assert_called_once_with(
+        "POST",
+        "core/runbooks/rb123/tasks",
+        json_data={
+            "data": {
+                "type": "task",
+                "attributes": {
+                    "name": "Scheduled Task",
+                    "description": "",
+                    "start_fixed": "2026-08-01T09:00:00Z",
+                    "end_fixed": "2026-08-01T10:00:00Z",
+                    "level": "level_2",
+                    "auto_start": True,
+                    "auto_finish": False,
                 },
             }
         },
@@ -587,6 +695,72 @@ async def test_update_runbook_task_with_assignees_replace(mock_client_manager):
                 },
             },
             "meta": {"delete_excluded_assignees": True},
+        },
+    )
+
+
+@pytest.mark.asyncio
+async def test_update_runbook_task_with_comms_params(mock_client_manager):
+    """Test updating a task with message and recipients."""
+    mock_client_manager.request.return_value = {
+        "data": {"id": "task123", "type": "task", "attributes": {"name": "Task"}}
+    }
+
+    recipients = [Recipient(id="user1", type="user")]
+
+    await tasks.update_runbook_task(
+        runbook_id="rb123",
+        task_id="task123",
+        message="Updated message",
+        recipients=recipients,
+    )
+
+    mock_client_manager.request.assert_called_once_with(
+        "PATCH",
+        "core/runbooks/rb123/tasks/task123",
+        json_data={
+            "data": {
+                "type": "task",
+                "id": "task123",
+                "attributes": {"message": "Updated message"},
+                "relationships": {"recipients": {"data": [{"id": "user1", "type": "user"}]}},
+            }
+        },
+    )
+
+
+@pytest.mark.asyncio
+async def test_update_runbook_task_with_scheduling_params(mock_client_manager):
+    """Test updating a task with start_fixed/end_fixed/level/auto_start/auto_finish."""
+    mock_client_manager.request.return_value = {
+        "data": {"id": "task123", "type": "task", "attributes": {"name": "Task"}}
+    }
+
+    await tasks.update_runbook_task(
+        runbook_id="rb123",
+        task_id="task123",
+        start_fixed="2026-08-01T09:00:00Z",
+        end_fixed="2026-08-01T10:00:00Z",
+        level="level_2",
+        auto_start=True,
+        auto_finish=False,
+    )
+
+    mock_client_manager.request.assert_called_once_with(
+        "PATCH",
+        "core/runbooks/rb123/tasks/task123",
+        json_data={
+            "data": {
+                "type": "task",
+                "id": "task123",
+                "attributes": {
+                    "start_fixed": "2026-08-01T09:00:00Z",
+                    "end_fixed": "2026-08-01T10:00:00Z",
+                    "level": "level_2",
+                    "auto_start": True,
+                    "auto_finish": False,
+                },
+            }
         },
     )
 

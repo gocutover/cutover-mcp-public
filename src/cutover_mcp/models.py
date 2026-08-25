@@ -114,6 +114,11 @@ class Assignee(BaseModel):
     type: Literal["user", "runbook_team"]
 
 
+class Recipient(BaseModel):
+    id: str
+    type: Literal["user", "runbook_team"]
+
+
 # NOTE: Cutover's task_links contract is asymmetric — writes require string
 # id, reads return int. Server-side bug tracked in API-461; drop the split
 # once that lands.
@@ -187,12 +192,17 @@ class TaskAttributes(BaseModel):
     custom_field_values: list[CustomFieldValue] | None = Field(None, alias="custom_field_values")
     comments_count: int | None = Field(None, alias="comments_count")
     task_links: list[TaskLinkResponse] | None = None
+    message: str | None = None
+    level: Literal["level_1", "level_2", "level_3"] | None = None
+    auto_start: bool | None = Field(None, alias="auto_start")
+    auto_finish: bool | None = Field(None, alias="auto_finish")
 
 
 class TaskRelationships(BaseModel):
     stream: Relationship[StreamIdentifier] | None = None
     task_type: Relationship[TaskTypeIdentifier] | None = Field(None, alias="task_type")
     assignees: Relationship[list[UserIdentifier | RunbookTeamIdentifier]] | None = None
+    recipients: Relationship[list[UserIdentifier | RunbookTeamIdentifier]] | None = None
     predecessors: Relationship[list[TaskIdentifier]] | None = None
     successors: Relationship[list[TaskIdentifier]] | None = None
     runbook_version: Relationship[RunbookVersionIdentifier] | None = Field(None, alias="runbook_version")

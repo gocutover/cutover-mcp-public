@@ -1,8 +1,8 @@
-from typing import Any
+from typing import Any, Literal
 
 from cutover_mcp.app import mcp
 from cutover_mcp.clients.api import client_mgr
-from cutover_mcp.models import Assignee, TaskLink, TaskResponse, inject_return_schema
+from cutover_mcp.models import Assignee, Recipient, TaskLink, TaskResponse, inject_return_schema
 
 
 @mcp.tool()
@@ -16,6 +16,15 @@ async def add_task_to_runbook(
     predecessors: list[str] | None = None,
     duration: int | None = None,
     task_links: list[TaskLink] | None = None,
+    message: str | None = None,
+    recipients: list[Recipient] | None = None,
+    assignees: list[Assignee] | None = None,
+    custom_field_values: list[dict] | None = None,
+    start_fixed: str | None = None,
+    end_fixed: str | None = None,
+    level: Literal["level_1", "level_2", "level_3"] | None = None,
+    auto_start: bool | None = None,
+    auto_finish: bool | None = None,
 ) -> TaskResponse:
     """
     Add a new task to an existing runbook.
@@ -35,6 +44,19 @@ async def add_task_to_runbook(
         freshly-spawned copy of the template, not the template itself, and the task's name is
         overwritten with the target's name. Use ``link_type="snippet"`` to attach one or more
         snippets.
+    :param message: The message body for an Email/SMS/Call comms task, or the initial prompt for
+        an agentic task.
+    :param recipients: List of recipients for a comms task (Email/SMS/Call).
+    :param assignees: List of assignees to add to the task. Only users and teams that are already
+        participants on the runbook can be assigned; non-participants are silently ignored by the API.
+    :param custom_field_values: List of custom field values to set. Each item should be a dict with either
+        {"name": "Field Name", "value": "value"} or {"custom_field_id": "123", "value": "value"}.
+        Value can be a string or list of strings for multi-select fields.
+    :param start_fixed: ISO 8601 timestamp fixing the task's start time.
+    :param end_fixed: ISO 8601 timestamp fixing the task's end time.
+    :param level: The task's level (default level_3).
+    :param auto_start: Whether the task should start automatically once its predecessors complete.
+    :param auto_finish: Whether the task should complete automatically once started.
     :return: A TaskResponse object representing the newly created task.
 
     JSON Schema of Return Object:
@@ -49,6 +71,20 @@ async def add_task_to_runbook(
         attributes["duration"] = duration
     if task_links is not None:
         attributes["task_links"] = [tl.model_dump() for tl in task_links]
+    if message is not None:
+        attributes["message"] = message
+    if custom_field_values is not None:
+        attributes["custom_field_values"] = custom_field_values
+    if start_fixed is not None:
+        attributes["start_fixed"] = start_fixed
+    if end_fixed is not None:
+        attributes["end_fixed"] = end_fixed
+    if level is not None:
+        attributes["level"] = level
+    if auto_start is not None:
+        attributes["auto_start"] = auto_start
+    if auto_finish is not None:
+        attributes["auto_finish"] = auto_finish
 
     payload: dict = {"data": {"type": "task", "attributes": attributes}}
 
@@ -63,6 +99,12 @@ async def add_task_to_runbook(
     if predecessors is not None:
         predecessor_data = [{"id": pred_id, "type": "task"} for pred_id in predecessors]
         relationships["predecessors"] = {"data": predecessor_data}
+
+    if recipients is not None:
+        relationships["recipients"] = {"data": [r.model_dump() for r in recipients]}
+
+    if assignees is not None:
+        relationships["assignees"] = {"data": [a.model_dump() for a in assignees]}
 
     if relationships:
         payload["data"]["relationships"] = relationships
@@ -86,6 +128,13 @@ async def update_runbook_task(
     assignees: list[Assignee] | None = None,
     delete_excluded_assignees: bool = False,
     task_links: list[TaskLink] | None = None,
+    message: str | None = None,
+    recipients: list[Recipient] | None = None,
+    start_fixed: str | None = None,
+    end_fixed: str | None = None,
+    level: Literal["level_1", "level_2", "level_3"] | None = None,
+    auto_start: bool | None = None,
+    auto_finish: bool | None = None,
 ) -> TaskResponse:
     """
     Update an existing task in a runbook (including dependencies, description, stream, duration, etc.).
@@ -101,15 +150,23 @@ async def update_runbook_task(
     :param custom_field_values: List of custom field values to update. Each item should be a dict with either
         {"name": "Field Name", "value": "value"} or {"custom_field_id": "123", "value": "value"}.
         Value can be a string or list of strings for multi-select fields.
-    :param assignees: List of assignees to add to the task. Each item must have an "id" and a "type" of
-        either "user" or "runbook_team". Only users and teams that are already participants on the runbook
-        can be assigned; non-participants are silently ignored by the API. By default these are added without
-        removing existing assignees; set delete_excluded_assignees=True to replace the full list instead.
+    :param assignees: List of assignees to add to the task. Only users and teams that are already
+        participants on the runbook can be assigned; non-participants are silently ignored by the API.
+        By default these are added without removing existing assignees; set delete_excluded_assignees=True
+        to replace the full list instead.
     :param delete_excluded_assignees: When False (default), adds the given assignees without removing existing
         ones. When True, replaces the full assignee list with only the assignees provided.
     :param task_links: Replaces the task's links to other resources. Use ``link_type="runbook"`` to link
         a task to a template runbook — the target must be a template runbook and must have ≥1 task. Use
         ``link_type="snippet"`` to attach one or more snippets. Pass an empty list to clear all links.
+    :param message: The message body for an Email/SMS/Call comms task, or the initial prompt for
+        an agentic task.
+    :param recipients: List of recipients for a comms task (Email/SMS/Call).
+    :param start_fixed: ISO 8601 timestamp fixing the task's start time.
+    :param end_fixed: ISO 8601 timestamp fixing the task's end time.
+    :param level: The task's level (default level_3).
+    :param auto_start: Whether the task should start automatically once its predecessors complete.
+    :param auto_finish: Whether the task should complete automatically once started.
     :return: A TaskResponse object representing the updated task.
 
     JSON Schema of Return Object:
@@ -129,6 +186,18 @@ async def update_runbook_task(
         attributes["custom_field_values"] = custom_field_values
     if task_links is not None:
         attributes["task_links"] = [tl.model_dump() for tl in task_links]
+    if message is not None:
+        attributes["message"] = message
+    if start_fixed is not None:
+        attributes["start_fixed"] = start_fixed
+    if end_fixed is not None:
+        attributes["end_fixed"] = end_fixed
+    if level is not None:
+        attributes["level"] = level
+    if auto_start is not None:
+        attributes["auto_start"] = auto_start
+    if auto_finish is not None:
+        attributes["auto_finish"] = auto_finish
 
     payload: dict = {"data": {"type": "task", "id": task_id, "attributes": attributes}}
 
@@ -143,6 +212,9 @@ async def update_runbook_task(
 
     if stream_id is not None:
         relationships["stream"] = {"data": {"id": stream_id, "type": "stream"}}
+
+    if recipients is not None:
+        relationships["recipients"] = {"data": [r.model_dump() for r in recipients]}
 
     if assignees is not None:
         relationships["assignees"] = {"data": [a.model_dump() for a in assignees]}
