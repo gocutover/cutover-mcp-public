@@ -16,7 +16,7 @@ async def list_runbook_types() -> RunbookTypeListResponse:
     {return_schema}
     ```
     """
-    client = client_mgr.get_client()
+    client = await client_mgr.get_client()
     all_data = []
     path: str | None = "core/runbook_types"
     last_response: dict = {}

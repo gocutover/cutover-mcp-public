@@ -21,7 +21,7 @@ async def list_streams(runbook_id: str, forecast: bool = False) -> StreamListRes
     ```
 
     """
-    client = client_mgr.get_client()
+    client = await client_mgr.get_client()
     params = {"forecast": "true"} if forecast else {}
     response = await client.request("GET", f"core/runbooks/{runbook_id}/streams", params=params)
     return StreamListResponse(**response)
@@ -52,7 +52,7 @@ async def create_stream(
     ```
 
     """
-    client = client_mgr.get_client()
+    client = await client_mgr.get_client()
     attributes = {"name": name}
     if description:
         attributes["description"] = description
@@ -84,7 +84,7 @@ async def get_stream(runbook_id: str, stream_id: str) -> StreamResponse:
     ```
 
     """
-    client = client_mgr.get_client()
+    client = await client_mgr.get_client()
     response = await client.request("GET", f"core/runbooks/{runbook_id}/streams/{stream_id}")
     return StreamResponse(**response)
 
@@ -114,7 +114,7 @@ async def update_stream(
     ```
 
     """
-    client = client_mgr.get_client()
+    client = await client_mgr.get_client()
     attributes = {}
     if name is not None:
         attributes["name"] = name
@@ -138,5 +138,5 @@ async def delete_stream(runbook_id: str, stream_id: str) -> dict[str, Any]:
     :param stream_id: The ID of the stream to delete.
     :return: An empty dictionary on successful deletion.
     """
-    client = client_mgr.get_client()
+    client = await client_mgr.get_client()
     return await client.request("DELETE", f"core/runbooks/{runbook_id}/streams/{stream_id}")

@@ -2,7 +2,6 @@ import pytest
 
 from cutover_mcp.tools import folders
 
-
 FOLDER_1 = {
     "id": "1",
     "type": "folder",

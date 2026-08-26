@@ -18,7 +18,7 @@ async def get_activities(
     :param created_before: Filter activities before this date (ISO 8601, e.g., "2025-12-31T23:59:59Z").
     :return: List of activity entries with id, key, starred, created_at, changes, description, etc.
     """
-    client = client_mgr.get_client()
+    client = await client_mgr.get_client()
     activities: list[dict[str, Any]] = []
 
     params: dict[str, str] = {"runbook_id": runbook_id}

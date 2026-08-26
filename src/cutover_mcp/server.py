@@ -1,5 +1,7 @@
 # server.py (Main FastMCP server definition)
 import logging
+import os
+import sys
 
 from dotenv import load_dotenv
 
@@ -14,8 +16,8 @@ from cutover_mcp.tools import (  # noqa: F401
     activities,
     comments,
     custom_fields,
-    runbook_types,
     folders,
+    runbook_types,
     runbooks,
     streams,
     task_types,
@@ -28,7 +30,17 @@ from cutover_mcp.tools import (  # noqa: F401
 # Load environment variables from .env file first
 load_dotenv()
 
+logging.basicConfig(level=logging.INFO, stream=sys.stderr)
 logger = logging.getLogger(__name__)
 
 if __name__ == "__main__":
-    mcp.run()
+    transport = os.getenv("MCP_TRANSPORT", "stdio")
+
+    if transport == "stdio":
+        mcp.run()
+    else:
+        mcp.run(
+            transport=transport,
+            host=os.getenv("MCP_HOST", "0.0.0.0"),
+            port=int(os.getenv("MCP_PORT", "8000")),
+        )

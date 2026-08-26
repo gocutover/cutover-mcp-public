@@ -32,7 +32,7 @@ async def get_action_logs(
     if max_pages < 1:
         raise ValueError("max_pages must be at least 1")
 
-    client = client_mgr.get_client()
+    client = await client_mgr.get_client()
     action_logs: list[dict[str, Any]] = []
 
     params: dict[str, Any] | None = {}

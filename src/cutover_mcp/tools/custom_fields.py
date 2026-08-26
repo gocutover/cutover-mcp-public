@@ -45,7 +45,7 @@ async def list_custom_fields(
         fields of searchable/structured parents are nested under their parent's
         dependent_fields key rather than listed as separate top-level entries.
     """
-    client = client_mgr.get_client()
+    client = await client_mgr.get_client()
 
     path: str | None = "core/custom_fields"
     params: dict[str, Any] | None = {}
@@ -114,7 +114,7 @@ async def get_custom_field(
     :param custom_field_id: The ID of the custom field to retrieve.
     :return: Custom field metadata with id, name, field_type, field_options, required, apply_to, allow_field_creation.
     """
-    client = client_mgr.get_client()
+    client = await client_mgr.get_client()
 
     response = await client.request("GET", f"core/custom_fields/{custom_field_id}")
 

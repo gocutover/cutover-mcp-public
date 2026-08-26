@@ -26,7 +26,7 @@ async def get_user(
     :param user_id: The user ID to fetch details for.
     :return: User details with id, email, and full_name.
     """
-    client = client_mgr.get_client()
+    client = await client_mgr.get_client()
     response = await client.request("GET", f"core/users/{user_id}")
     return _parse_user(response.get("data", {}))
 
@@ -41,6 +41,6 @@ async def search_users(
     :param query: Search string (name or email, partial match).
     :return: List of matching users, each with id, email, and full_name.
     """
-    client = client_mgr.get_client()
+    client = await client_mgr.get_client()
     response = await client.request("GET", "core/users", params={"query": query})
     return [_parse_user(user_data) for user_data in response.get("data", [])]

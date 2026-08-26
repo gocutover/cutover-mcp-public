@@ -5,6 +5,8 @@ from contextlib import asynccontextmanager
 
 from dotenv import load_dotenv
 from fastmcp import FastMCP
+from starlette.requests import Request
+from starlette.responses import JSONResponse
 
 from cutover_mcp.clients.api import client_mgr
 
@@ -29,3 +31,8 @@ mcp = FastMCP(
     instructions="A set of tools and resources for interacting with the Cutover platform.",
     lifespan=app_lifespan,
 )
+
+
+@mcp.custom_route("/health", methods=["GET"])
+async def health_check(request: Request) -> JSONResponse:
+    return JSONResponse({"status": "ok"})

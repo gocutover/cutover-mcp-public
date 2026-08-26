@@ -1,0 +1,29 @@
+name-template: "v$RESOLVED_VERSION"
+tag-template: "$RESOLVED_VERSION"
+version-template: "$MAJOR.$MINOR.$PATCH"
+
+categories:
+  - title: "🚀 Enhancements"
+    semver-increment: "minor"
+    when:
+      label: "enhancement"
+  - title: "🐛 Bug Fixes"
+    semver-increment: "patch"
+    when:
+      labels:
+        - "bug"
+        - "security"
+  - title: "🤖 Dependency Updates"
+    semver-increment: "patch"
+    when:
+      label: "dependencies"
+  - type: "version-resolver"
+    semver-increment: "major"
+    when:
+      label: "breaking-change"
+  - type: "version-resolver"
+    semver-increment: "patch"
+
+change-template: "- $TITLE @$AUTHOR (#$NUMBER)"
+template: |
+  $CHANGES

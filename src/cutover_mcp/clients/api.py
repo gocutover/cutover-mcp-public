@@ -4,8 +4,23 @@ import os
 from typing import Any
 
 import httpx
+from pydantic import BaseModel, Field
 
 logger = logging.getLogger(__name__)
+
+
+class CutoverCredentials(BaseModel):
+    """Requested from the user via an interactive elicitation form."""
+
+    base_url: str = Field(
+        description="The Cutover API endpoint for your environment, e.g. "
+        "https://api.cutover.com."
+    )
+    core_url: str = Field(
+        description="The Cutover server URL you want to connect to. Must be an "
+        "absolute URL with scheme, e.g. https://your-instance.cutover.com."
+    )
+    api_token: str = Field(description="Your personal Cutover API token for that server.")
 
 
 class CutoverAPIError(Exception):
@@ -140,20 +155,96 @@ class APIClient:
         raise ConnectionError("API request failed after multiple retries.")  # Should not be reached
 
 
+def _credentials_from_http_headers() -> tuple[str | None, str | None, str | None]:
+    """Try to extract (api_key, core_url, base_url) from the current HTTP request's headers.
+
+    Returns (None, None, None) outside an HTTP request context (e.g. stdio transport).
+    """
+    try:
+        from fastmcp.server.dependencies import get_http_request
+
+        headers = get_http_request().headers
+    except Exception:
+        return None, None, None
+
+    api_key = None
+    auth = headers.get("authorization", "")
+    if auth.startswith("Bearer "):
+        api_key = auth.removeprefix("Bearer ").strip()
+
+    core_url = headers.get("core-url") or None
+    base_url = headers.get("base-url") or None
+    return api_key, core_url, base_url
+
+
+async def _credentials_from_elicitation() -> tuple[str | None, str | None, str | None]:
+    """Try to obtain (api_key, core_url, base_url) via an interactive client-side form.
+
+    Caches an accepted answer in session state so the user is only prompted
+    once per session. Returns (None, None, None) outside a live session (e.g.
+    stdio), if the connected client doesn't support elicitation, or if the
+    user declines/cancels the prompt.
+    """
+    try:
+        from fastmcp.server.dependencies import get_context
+
+        ctx = get_context()
+    except RuntimeError:
+        return None, None, None
+
+    cached_key = await ctx.get_state("cutover_api_key")
+    cached_url = await ctx.get_state("cutover_core_url")
+    cached_base_url = await ctx.get_state("cutover_base_url")
+    if cached_key:
+        return cached_key, cached_url, cached_base_url
+
+    try:
+        result = await ctx.elicit(
+            "Enter the Cutover API endpoint, server URL, and your personal API token to continue.",
+            CutoverCredentials,
+        )
+    except Exception:
+        logger.warning("Credential elicitation failed or unsupported by client.")
+        return None, None, None
+
+    if result.action != "accept":
+        return None, None, None
+
+    await ctx.set_state("cutover_api_key", result.data.api_token)
+    await ctx.set_state("cutover_core_url", result.data.core_url)
+    await ctx.set_state("cutover_base_url", result.data.base_url)
+    return result.data.api_token, result.data.core_url, result.data.base_url
+
+
 class APIClientManager:
     """
     A small pool to manage APIClient instances, keyed by base_url and api_key.
     This ensures we reuse clients efficiently.
+
+    When running over streamable-http, the Cutover API token, Core-Url, and
+    Base-Url are read from the incoming request's Authorization / Core-Url /
+    Base-Url headers (per-user, so a single deployment can serve sessions
+    targeting different Cutover environments). Falls back to env vars for
+    stdio / local development, and as a last resort prompts the connected
+    client interactively (session-cached) if it supports elicitation.
     """
 
     def __init__(self):
         self._clients: dict[str, APIClient] = {}
 
-    def get_client(self) -> APIClient:
-        """Gets a client based on environment variables."""
-        base_url = os.getenv("CUTOVER_BASE_URL")
-        api_key = os.getenv("CUTOVER_API_TOKEN")
-        core_url = os.getenv("CUTOVER_CORE_URL")
+    async def get_client(self) -> APIClient:
+        """Gets a client, preferring per-request HTTP credentials over env vars."""
+        header_api_key, header_core_url, header_base_url = _credentials_from_http_headers()
+        api_key = header_api_key or os.getenv("CUTOVER_API_TOKEN")
+        core_url = header_core_url or os.getenv("CUTOVER_CORE_URL")
+        base_url = header_base_url or os.getenv("CUTOVER_BASE_URL")
+
+        if not api_key:
+            elicited_key, elicited_core_url, elicited_base_url = await _credentials_from_elicitation()
+            if elicited_key:
+                api_key = elicited_key
+                core_url = core_url or elicited_core_url
+                base_url = base_url or elicited_base_url
 
         if not base_url or not api_key:
             raise ValueError("CUTOVER_BASE_URL and CUTOVER_API_TOKEN must be set.")

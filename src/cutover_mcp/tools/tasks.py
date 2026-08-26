@@ -65,7 +65,7 @@ async def add_task_to_runbook(
     ```
 
     """
-    client = client_mgr.get_client()
+    client = await client_mgr.get_client()
     attributes = {"name": name, "description": description}
     if duration is not None:
         attributes["duration"] = duration
@@ -174,7 +174,7 @@ async def update_runbook_task(
     {return_schema}
     ```
     """
-    client = client_mgr.get_client()
+    client = await client_mgr.get_client()
     attributes: dict = {}
     if name is not None:
         attributes["name"] = name
@@ -236,7 +236,7 @@ async def start_task(runbook_id: str, task_id: str) -> TaskResponse:
     :param task_id: The ID of the task to start.
     :return: A TaskResponse object representing the started task.
     """
-    client = client_mgr.get_client()
+    client = await client_mgr.get_client()
     response = await client.request("PATCH", f"core/runbooks/{runbook_id}/tasks/{task_id}/start")
     return TaskResponse(**response)
 
@@ -250,7 +250,7 @@ async def complete_task(runbook_id: str, task_id: str) -> TaskResponse:
     :param task_id: The ID of the task to complete.
     :return: A TaskResponse object representing the completed task.
     """
-    client = client_mgr.get_client()
+    client = await client_mgr.get_client()
     response = await client.request("PATCH", f"core/runbooks/{runbook_id}/tasks/{task_id}/finish")
     return TaskResponse(**response)
 
@@ -267,7 +267,7 @@ async def skip_task(runbook_id: str, task_id: str, comment: str) -> dict[str, An
     :return: An acknowledgement dictionary. Unlike start/complete, the skip endpoint does
         not return the task object.
     """
-    client = client_mgr.get_client()
+    client = await client_mgr.get_client()
     payload = {"meta": {"comment": comment}}
     return await client.request("PATCH", f"core/runbooks/{runbook_id}/tasks/{task_id}/skip", json_data=payload)
 
@@ -281,5 +281,5 @@ async def delete_task(runbook_id: str, task_id: str) -> dict[str, Any]:
     :param task_id: The ID of the task to delete.
     :return: An empty dictionary on successful deletion.
     """
-    client = client_mgr.get_client()
+    client = await client_mgr.get_client()
     return await client.request("DELETE", f"core/runbooks/{runbook_id}/tasks/{task_id}")

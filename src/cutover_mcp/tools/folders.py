@@ -20,7 +20,7 @@ async def list_folders(workspace_id: str) -> FolderListResponse:
     ```
 
     """
-    client = client_mgr.get_client()
+    client = await client_mgr.get_client()
 
     path: str | None = f"core/workspaces/{workspace_id}/folders"
     all_data: list[dict[str, Any]] = []

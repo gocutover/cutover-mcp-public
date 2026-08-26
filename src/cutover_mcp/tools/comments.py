@@ -28,7 +28,7 @@ async def add_comment(
     ```
 
     """
-    client = client_mgr.get_client()
+    client = await client_mgr.get_client()
     payload: dict = {"data": {"type": "comment", "attributes": {"content": content}}}
 
     if task_id is not None:

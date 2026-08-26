@@ -12,7 +12,7 @@ async def get_workspace_by_id(workspace_id: str) -> dict[str, Any]:
     :param workspace_id: The unique identifier for the workspace.
     :return: A dictionary containing the workspace details.
     """
-    client = client_mgr.get_client()
+    client = await client_mgr.get_client()
     return await client.request("GET", f"core/workspaces/{workspace_id}")
 
 
@@ -24,7 +24,7 @@ async def query_workspaces(query: str) -> dict[str, Any]:
     :param query: The search string to filter workspaces by.
     :return: A dictionary containing a list of workspaces matching the query.
     """
-    client = client_mgr.get_client()
+    client = await client_mgr.get_client()
     params = {"query": query}
     return await client.request("GET", "core/workspaces", params=params)
 
@@ -38,7 +38,7 @@ async def list_workspaces(limit: int = 50, offset: int = 0) -> dict:
     :param offset: The number of workspaces to skip from the beginning.
     :return: A dictionary containing a list of workspaces.
     """
-    client = client_mgr.get_client()
+    client = await client_mgr.get_client()
     params = {"page[limit]": limit, "page[offset]": offset}
     return await client.request("GET", "core/workspaces", params=params)
 
@@ -53,7 +53,7 @@ async def create_workspace(name: str, description: str = "", key: str = "") -> d
     :param key: Required, shortened version of the workspace/account name.
     :return: A dictionary representing the newly created workspace/account.
     """
-    client = client_mgr.get_client()
+    client = await client_mgr.get_client()
     payload = {
         "data": {
             "type": "workspace",

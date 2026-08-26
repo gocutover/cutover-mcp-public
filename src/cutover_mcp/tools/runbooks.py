@@ -20,7 +20,7 @@ async def get_runbook_by_id(runbook_id: str) -> RunbookResponse:
     {return_schema}
     ```
     """
-    client = client_mgr.get_client()
+    client = await client_mgr.get_client()
     response = await client.request("GET", f"core/runbooks/{runbook_id}")
     return RunbookResponse(**response)
 
@@ -45,7 +45,7 @@ async def list_runbooks(
     :param extra_params: Additional query parameters to pass to the API (e.g. {"stage": "active"}).
     :return: A RunbookListResponse object containing a list of runbooks.
     """
-    client = client_mgr.get_client()
+    client = await client_mgr.get_client()
 
     path: str | None = "core/runbooks"
     params: dict[str, Any] = {"workspace_id": workspace_id}
@@ -140,7 +140,7 @@ async def get_runbook_tasks(
     ```
 
     """
-    client = client_mgr.get_client()
+    client = await client_mgr.get_client()
 
     params: dict[str, Any] = {}
     if forecast:
@@ -225,7 +225,7 @@ async def update_runbook(
         Value can be a string or list of strings for multi-select fields.
     :return: A RunbookResponse object representing the updated runbook.
     """
-    client = client_mgr.get_client()
+    client = await client_mgr.get_client()
     attributes = {}
     if name is not None:
         attributes["name"] = name
@@ -310,7 +310,7 @@ async def create_runbook(
         recalculated relative to the new runbook's start.
     :return: A RunbookResponse object representing the newly created runbook.
     """
-    client = client_mgr.get_client()
+    client = await client_mgr.get_client()
     attributes = {"name": name, "description": description}
     if status is not None:
         attributes["status"] = status
@@ -393,7 +393,7 @@ async def manage_runbook(
     :param notify: Notify users about the action (for cancel, pause, resume).
     :return: A dictionary containing the response from the server.
     """
-    client = client_mgr.get_client()
+    client = await client_mgr.get_client()
 
     # Define the endpoint based on the action
     endpoint_map = {
@@ -445,7 +445,7 @@ async def get_runbook_template_copies(
     :param runbook_id: The template runbook ID to find copies of.
     :return: A RunbookListResponse containing list of runbooks created from this template.
     """
-    client = client_mgr.get_client()
+    client = await client_mgr.get_client()
     all_data: list[dict[str, Any]] = []
 
     # Build initial path with source_runbook_id filter

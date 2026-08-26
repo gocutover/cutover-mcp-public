@@ -14,7 +14,7 @@ async def get_runbook_teams(
     :param runbook_id: The runbook ID to fetch teams for.
     :return: List of team objects with id, team_id, name, and users_count.
     """
-    client = client_mgr.get_client()
+    client = await client_mgr.get_client()
     teams: list[dict[str, Any]] = []
 
     # Build initial path
