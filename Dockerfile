@@ -16,4 +16,4 @@ RUN uv sync
 EXPOSE 8000
 
 # Command to run the server
-CMD ["uv", "run", "python", "src/cutover_mcp/server.py"]
+CMD ["/app/.venv/bin/python", "src/cutover_mcp/server.py"]
