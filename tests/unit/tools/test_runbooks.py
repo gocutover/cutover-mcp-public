@@ -439,6 +439,71 @@ async def test_update_runbook_with_rto_tasks(mock_client_manager):
 
 
 @pytest.mark.asyncio
+async def test_update_runbook_with_folder_id(mock_client_manager):
+    """folder_id is sent as a folder relationship, allowing an existing runbook to be moved."""
+    mock_client_manager.request.return_value = {
+        "data": {
+            "id": "rb123",
+            "type": "runbook",
+            "attributes": {"name": "Moved Runbook"},
+            "relationships": {"folder": {"data": {"id": "f42", "type": "folder"}}},
+        }
+    }
+
+    await runbooks.update_runbook(runbook_id="rb123", folder_id="f42")
+
+    mock_client_manager.request.assert_called_once_with(
+        "PATCH",
+        "core/runbooks/rb123",
+        json_data={
+            "data": {
+                "type": "runbook",
+                "id": "rb123",
+                "attributes": {},
+                "relationships": {"folder": {"data": {"type": "folder", "id": "f42"}}},
+            }
+        },
+    )
+
+
+@pytest.mark.asyncio
+async def test_update_runbook_with_master_template_and_scheduling(mock_client_manager):
+    """Test updating master_template, start_scheduled, end_scheduled, and auto_start."""
+    mock_client_manager.request.return_value = {
+        "data": {
+            "id": "rb123",
+            "type": "runbook",
+            "attributes": {"name": "Scheduled Runbook", "master_template": True},
+        }
+    }
+
+    await runbooks.update_runbook(
+        runbook_id="rb123",
+        master_template=True,
+        start_scheduled="2026-08-10T09:00:00Z",
+        end_scheduled="2026-08-10T10:00:00Z",
+        auto_start=True,
+    )
+
+    mock_client_manager.request.assert_called_once_with(
+        "PATCH",
+        "core/runbooks/rb123",
+        json_data={
+            "data": {
+                "type": "runbook",
+                "id": "rb123",
+                "attributes": {
+                    "master_template": True,
+                    "start_scheduled": "2026-08-10T09:00:00Z",
+                    "end_scheduled": "2026-08-10T10:00:00Z",
+                    "auto_start": True,
+                },
+            }
+        },
+    )
+
+
+@pytest.mark.asyncio
 async def test_create_runbook_minimal(mock_client_manager):
     """Test creating a runbook with minimal parameters."""
     # Set up mock response
@@ -603,6 +668,80 @@ async def test_create_runbook_with_folder_id(mock_client_manager):
                     "workspace": {"data": {"type": "workspace", "id": "ws123"}},
                     "folder": {"data": {"type": "folder", "id": "f42"}},
                 },
+            }
+        },
+    )
+
+
+@pytest.mark.asyncio
+async def test_create_runbook_with_custom_field_values(mock_client_manager):
+    """Test creating a runbook with custom_field_values."""
+    mock_client_manager.request.return_value = {
+        "data": {
+            "id": "rb-cf",
+            "type": "runbook",
+            "attributes": {"name": "CF Runbook", "description": ""},
+        }
+    }
+
+    await runbooks.create_runbook(
+        workspace_id="ws123",
+        name="CF Runbook",
+        custom_field_values=[{"name": "Review", "value": "Pending"}],
+    )
+
+    mock_client_manager.request.assert_called_once_with(
+        "POST",
+        "core/runbooks",
+        json_data={
+            "data": {
+                "type": "runbook",
+                "attributes": {
+                    "name": "CF Runbook",
+                    "description": "",
+                    "custom_field_values": [{"name": "Review", "value": "Pending"}],
+                },
+                "relationships": {"workspace": {"data": {"type": "workspace", "id": "ws123"}}},
+            }
+        },
+    )
+
+
+@pytest.mark.asyncio
+async def test_create_runbook_with_master_template_and_scheduling(mock_client_manager):
+    """Test creating a runbook with master_template, start_scheduled, end_scheduled, and auto_start."""
+    mock_client_manager.request.return_value = {
+        "data": {
+            "id": "rb-sched",
+            "type": "runbook",
+            "attributes": {"name": "Scheduled Runbook", "description": "", "master_template": True},
+        }
+    }
+
+    await runbooks.create_runbook(
+        workspace_id="ws123",
+        name="Scheduled Runbook",
+        master_template=True,
+        start_scheduled="now",
+        end_scheduled="2026-08-10T10:00:00Z",
+        auto_start=True,
+    )
+
+    mock_client_manager.request.assert_called_once_with(
+        "POST",
+        "core/runbooks",
+        json_data={
+            "data": {
+                "type": "runbook",
+                "attributes": {
+                    "name": "Scheduled Runbook",
+                    "description": "",
+                    "master_template": True,
+                    "start_scheduled": "now",
+                    "end_scheduled": "2026-08-10T10:00:00Z",
+                    "auto_start": True,
+                },
+                "relationships": {"workspace": {"data": {"type": "workspace", "id": "ws123"}}},
             }
         },
     )

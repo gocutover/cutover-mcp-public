@@ -207,6 +207,11 @@ async def update_runbook(
     rto_end_task: str | None = None,
     rto_start_task: str | None = None,
     custom_field_values: list[dict] | None = None,
+    folder_id: str | None = None,
+    master_template: bool | None = None,
+    start_scheduled: str | None = None,
+    end_scheduled: str | None = None,
+    auto_start: bool | None = None,
 ) -> RunbookResponse:
     """
     Update a specific runbook's fields.
@@ -223,6 +228,19 @@ async def update_runbook(
     :param custom_field_values: List of custom field values to update. Each item should be a dict with
         either {"name": "Field Name", "value": "value"} or {"custom_field_id": "123", "value": "value"}.
         Value can be a string or list of strings for multi-select fields.
+    :param folder_id: ID of the folder to move the runbook to (optional, relationship field).
+    :param master_template: Whether this runbook can be used to create app-specific templates from the
+        Workspace Data Sources view. Requires is_template=True; the API rejects setting this on a
+        non-template runbook. Do NOT respond to that rejection by also setting is_template=True in the
+        same or a follow-up call unless the user explicitly asked for the runbook to become a template
+        — silently converting a live runbook into a template is a significant, hard-to-reverse side
+        effect. Surface the rejection and ask the user instead.
+    :param start_scheduled: ISO 8601 timestamp, or the literal string "now", to schedule the runbook's
+        start. The scheduler ignores times in the past.
+    :param end_scheduled: ISO 8601 timestamp for the runbook's scheduled end. Must be omitted if
+        start_scheduled is not set.
+    :param auto_start: Whether to auto-start the runbook once start_scheduled is reached. Auto-started
+        runbooks run in live mode with comms on.
     :return: A RunbookResponse object representing the updated runbook.
     """
     client = await client_mgr.get_client()
@@ -241,12 +259,22 @@ async def update_runbook(
         attributes["timezone"] = timezone
     if custom_field_values is not None:
         attributes["custom_field_values"] = custom_field_values
+    if master_template is not None:
+        attributes["master_template"] = master_template
+    if start_scheduled is not None:
+        attributes["start_scheduled"] = start_scheduled
+    if end_scheduled is not None:
+        attributes["end_scheduled"] = end_scheduled
+    if auto_start is not None:
+        attributes["auto_start"] = auto_start
 
     relationships = {}
     if rto_start_task is not None:
         relationships["rto_start_task"] = {"data": {"type": "task", "id": rto_start_task}}
     if rto_end_task is not None:
         relationships["rto_end_task"] = {"data": {"type": "task", "id": rto_end_task}}
+    if folder_id is not None:
+        relationships["folder"] = {"data": {"type": "folder", "id": folder_id}}
 
     payload = {
         "data": {
@@ -276,6 +304,11 @@ async def create_runbook(
     rto_start_task: str | None = None,
     runbook_type_id: str | None = None,
     folder_id: str | None = None,
+    custom_field_values: list[dict] | None = None,
+    master_template: bool | None = None,
+    start_scheduled: str | None = None,
+    end_scheduled: str | None = None,
+    auto_start: bool | None = None,
     copy_source_runbook_id: str | None = None,
     copy_tasks: bool | None = None,
     copy_teams: bool | None = None,
@@ -299,6 +332,22 @@ async def create_runbook(
     :param rto_end_task: ID of the end task for RTO/RTA feature (optional, relationship field).
     :param folder_id: ID of the folder to place the new runbook in (optional, relationship field).
         If omitted, the runbook lands in the workspace's default location.
+    :param custom_field_values: List of custom field values to set. Each item should be a dict with either
+        {"name": "Field Name", "value": "value"} or {"custom_field_id": "123", "value": "value"}.
+        Value can be a string or list of strings for multi-select fields.
+    :param master_template: Whether this runbook can be used to create app-specific templates from the
+        Workspace Data Sources view. Requires is_template=True; the API rejects setting this on a
+        non-template runbook. Do NOT respond to that rejection by also setting is_template=True in the
+        same or a follow-up call unless the user explicitly asked for the runbook to become a template
+        — silently converting a live runbook into a template is a significant, hard-to-reverse side
+        effect. Surface the rejection and ask the user instead.
+    :param start_scheduled: ISO 8601 timestamp, or the literal string "now", to schedule the runbook's
+        start. Mutually exclusive with a planned start time set elsewhere; the scheduler ignores times
+        in the past.
+    :param end_scheduled: ISO 8601 timestamp for the runbook's scheduled end. Must be omitted if
+        start_scheduled is not set.
+    :param auto_start: Whether to auto-start the runbook once start_scheduled is reached. Auto-started
+        runbooks run in live mode with comms on.
     :param copy_source_runbook_id: ID of an existing runbook/template to copy from. When set, this
         runbook is created as a copy and workspace_id may be omitted. The copy flags below all default
         to a full clone; only set one to False when the user asks to exclude that part.
@@ -322,6 +371,16 @@ async def create_runbook(
         attributes["rto"] = rto
     if timezone is not None:
         attributes["timezone"] = timezone
+    if custom_field_values is not None:
+        attributes["custom_field_values"] = custom_field_values
+    if master_template is not None:
+        attributes["master_template"] = master_template
+    if start_scheduled is not None:
+        attributes["start_scheduled"] = start_scheduled
+    if end_scheduled is not None:
+        attributes["end_scheduled"] = end_scheduled
+    if auto_start is not None:
+        attributes["auto_start"] = auto_start
 
     relationships = {}
     if workspace_id is not None:

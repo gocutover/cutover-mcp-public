@@ -312,11 +312,14 @@ class RunbookAttributes(BaseModel):
     description: str | None = None
     archived: bool = False
     is_template: bool | None = Field(False, alias="is_template")
+    master_template: bool | None = Field(False, alias="master_template")
     stage: Literal["planning", "active", "paused", "canceled", "complete"] | None = None
     status: Literal["off", "red", "amber", "green"] | None = None
     template_type: Literal["off", "default", "snippet"] | None = Field(None, alias="template_type")
+    template_status: Literal["draft", "pending", "approved"] | None = Field(None, alias="template_status")
     rto: int | None = None  # Recovery Time Objective in seconds
     timezone: str | None = None  # IANA timezone name
+    auto_start: bool | None = Field(False, alias="auto_start")
     start_planned: datetime | None = None
     end_planned: datetime | None = None
     start_scheduled: datetime | None = None
