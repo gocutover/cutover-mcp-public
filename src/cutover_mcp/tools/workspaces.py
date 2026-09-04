@@ -44,13 +44,13 @@ async def list_workspaces(limit: int = 50, offset: int = 0) -> dict:
 
 
 @mcp.tool()
-async def create_workspace(name: str, description: str = "", key: str = "") -> dict:
+async def create_workspace(name: str, key: str, description: str = "") -> dict:
     """
     Create a new account/workspace.
 
     :param name: The name of the new workspace/account.
-    :param description: An optional description for the workspace/account.
     :param key: Required, shortened version of the workspace/account name.
+    :param description: An optional description for the workspace/account.
     :return: A dictionary representing the newly created workspace/account.
     """
     client = await client_mgr.get_client()

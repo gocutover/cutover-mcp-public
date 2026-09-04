@@ -89,31 +89,40 @@ async def test_list_workspaces_with_pagination(mock_client_manager):
 
 @pytest.mark.asyncio
 async def test_create_workspace_minimal(mock_client_manager):
-    """Test creating a workspace with minimal parameters."""
+    """Test creating a workspace with only the required parameters (name, key)."""
     # Set up mock response
     mock_client_manager.request.return_value = {
         "data": {
             "id": "ws_new",
             "type": "workspace",
-            "attributes": {"name": "New Workspace", "description": "", "key": ""},
+            "attributes": {"name": "New Workspace", "description": "", "key": "NEW"},
         }
     }
 
     # Call the function with minimal params
-    result = await workspaces.create_workspace(name="New Workspace")
+    result = await workspaces.create_workspace(name="New Workspace", key="NEW")
 
     # Verify the API call
     mock_client_manager.request.assert_called_once_with(
         "POST",
         "core/workspaces",
         json_data={
-            "data": {"type": "workspace", "attributes": {"name": "New Workspace", "description": "", "key": ""}}
+            "data": {"type": "workspace", "attributes": {"name": "New Workspace", "description": "", "key": "NEW"}}
         },
     )
 
     # Verify the result
     assert result["data"]["id"] == "ws_new"
     assert result["data"]["attributes"]["name"] == "New Workspace"
+
+
+@pytest.mark.asyncio
+async def test_create_workspace_missing_key_raises(mock_client_manager):
+    """key is required — omitting it should fail before any API call is made."""
+    with pytest.raises(TypeError):
+        await workspaces.create_workspace(name="New Workspace")
+
+    mock_client_manager.request.assert_not_called()
 
 
 @pytest.mark.asyncio

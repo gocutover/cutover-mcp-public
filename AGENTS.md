@@ -63,3 +63,4 @@ uv run pytest
 ## Conventions
 
 - Formatting/linting via `ruff` (see `pyproject.toml`); a pre-commit config (`.pre-commit-config.yaml`) enforces this.
+- If a change adds, removes, renames, or changes the parameters/behavior of a `@mcp.tool()` in `src/cutover_mcp/tools/`, update the **Capabilities** section in both `README.md` and `README-PUBLIC.md` in the same PR — the group table, the tool's own `<details>` entry, and the tool/group counts in the section's opening sentence. Keep the two files in sync with each other (see [Project Structure](README.md#project-structure) for how they relate).
