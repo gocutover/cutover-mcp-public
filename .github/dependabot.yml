@@ -1,18 +1,31 @@
-# Enable Dependabot for security updates and version bumps
+# Enable Dependabot for security updates and version bumps.
+#
+# Every merge to main is a release (see release.yml), so version bumps are batched into one
+# grouped PR per week rather than one PR, one release and one hosted-instance restart per package.
 version: 2
 updates:
   - package-ecosystem: "uv"
     directory: "/"
     schedule:
-      interval: "daily"
+      interval: "weekly"
+      day: "monday"
     allow:
       - dependency-type: "all"
-    ignore:
-      - dependency-name: "*"
-        update-types: ["version-update:semver-patch"]
+    # Patch updates are included: the weekly group absorbs the churn they used to cause, and
+    # ignore rules also apply to security updates, so skipping patches could hide a fix.
     cooldown:
       default-days: 7
-    open-pull-requests-limit: 10
+    groups:
+      # All routine version bumps land together in a single "fix(deps): bump the dependencies group" PR.
+      dependencies:
+        applies-to: version-updates
+        patterns: ["*"]
+      # Security updates ignore the weekly schedule and arrive as soon as an advisory is published,
+      # but still as one PR rather than one per package.
+      security:
+        applies-to: security-updates
+        patterns: ["*"]
+    open-pull-requests-limit: 5
     commit-message:
       prefix: "fix"
       include: "scope"
