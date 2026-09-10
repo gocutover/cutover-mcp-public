@@ -502,6 +502,7 @@ The MCP server adds no security model of its own — it authenticates to the Cut
 ## Notes
 
 - Dependency and environment management is handled by [uv](https://github.com/astral-sh/uv) and [hatchling](https://hatch.pypa.io/).
+- Versioned releases and the changelog live under [Releases](https://github.com/gocutover/cutover-mcp-public/releases). The server reports its version as `serverInfo.version` and from `GET /health` when running over HTTP.
 
 ## Client Setup
 

@@ -2,6 +2,10 @@ name-template: "v$RESOLVED_VERSION"
 tag-template: "$RESOLVED_VERSION"
 version-template: "$MAJOR.$MINOR.$PATCH"
 
+# Let the last prerelease be the comparison baseline when nothing stable is newer, so the first
+# stable release lists the PRs merged since the last `0.0.1-dev.N` instead of "No changes".
+include-pre-releases: true
+
 categories:
   - title: "🚀 Enhancements"
     semver-increment: "minor"

@@ -6,6 +6,8 @@ from typing import Any
 import httpx
 from pydantic import BaseModel, Field
 
+from cutover_mcp import __version__
+
 logger = logging.getLogger(__name__)
 
 
@@ -94,7 +96,7 @@ class APIClient:
             headers = {
                 "Accept": "application/json",
                 "Content-Type": "application/json",
-                "User-Agent": "CutoverMCP/0.3.0",
+                "User-Agent": f"CutoverMCP/{__version__}",
                 "Authorization": f"Bearer {self.api_key}",
             }
             if self.core_url:

@@ -1,6 +1,6 @@
 [project]
 name = "cutover-mcp"
-version = "0.2.0"
+dynamic = ["version"]
 description = "An MCP server for interacting with the Cutover API, powered by FastMCP."
 authors = [{ name = "Cutover", email = "bot@cutover.com" }]
 readme = "README.md"
@@ -26,8 +26,22 @@ dev = [
 ]
 
 [build-system]
-requires = ["hatchling"]
+requires = ["hatchling", "hatch-vcs"]
 build-backend = "hatchling.build"
+
+[tool.hatch.version]
+# The git tag is the single source of truth for the version (see README, "Releases & versioning").
+# release.yml tags every merge to main as `1.2.3`. The code reads the resulting package metadata
+# via `cutover_mcp.__version__`.
+source = "vcs"
+# Used when git metadata is unavailable, e.g. a Docker build without the VERSION build arg.
+fallback-version = "0.0.0"
+
+[tool.hatch.version.raw-options]
+# The repo history carries old `0.0.1-dev.N` prerelease tags, which setuptools-scm's default
+# "guess next version" scheme refuses to bump. Report the nearest tag as-is; commits past it
+# (or a dirty tree) get a local `+g<sha>[.d<date>]` suffix instead.
+version_scheme = "only-version"
 
 [project.scripts]
 # The FastMCP CLI is the primary way to run the server
