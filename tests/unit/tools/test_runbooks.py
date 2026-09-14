@@ -33,6 +33,8 @@ async def test_get_runbook_by_id(mock_client_manager):
     assert result.data.id == "rb123"
     assert result.data.attributes.name == "Test Runbook"
     assert result.data.attributes.status == "green"
+    assert result.data.attributes.master_template is None
+    assert result.data.attributes.auto_start is None
 
 
 @pytest.mark.asyncio

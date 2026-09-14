@@ -21,14 +21,14 @@ An MCP server for interacting with the Cutover API, powered by FastMCP.
 
 ## Capabilities
 
-The server exposes 33 tools over MCP, grouped into 13 categories.
+The server exposes 35 tools over MCP, grouped into 13 categories.
 
 ### Tool Groups
 
 | Group | Description |
 | --- | --- |
 | `runbooks` | Create, read, update, and control the lifecycle of runbooks and templates |
-| `runbook_types` | Look up runbook types |
+| `runbook_types` | List, fetch, and query runbook types |
 | `tasks` | Read, add, update, and progress (start/complete/skip/delete) tasks within a runbook |
 | `task_types` | Look up task types |
 | `streams` | Create, read, update, and delete streams and substreams within a runbook |
@@ -143,6 +143,28 @@ The server exposes 33 tools over MCP, grouped into 13 categories.
 <summary>list_runbook_types - List all runbook types in the instance</summary>
 
 _No parameters._
+
+</details>
+
+<details>
+
+<summary>get_runbook_type_by_id - Fetch details for a specific runbook type by its ID</summary>
+
+- `runbook_type_id`: The unique identifier for the runbook type (string, required)
+
+</details>
+
+<details>
+
+<summary>query_runbook_types - Find runbook types matching text and/or capability flags</summary>
+
+- `query`: Case-insensitive text matched against the runbook type name, key, and description (string, optional)
+- `incident`: Filter by whether the type is for incidents (boolean, optional)
+- `enable_rto`: Filter by whether the type supports the RTO/RTA feature (boolean, optional)
+- `dynamic`: Filter by whether the type is dynamic (boolean, optional)
+- `ai_create_enabled`: Filter by whether AI-assisted creation is enabled for the type (boolean, optional)
+- `include_archived`: Include archived runbook types; archived types are excluded by default (boolean, optional)
+- `include_disabled`: Include disabled runbook types; disabled types are excluded by default (boolean, optional)
 
 </details>
 
