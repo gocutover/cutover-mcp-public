@@ -21,7 +21,7 @@ An MCP server for interacting with the Cutover API, powered by FastMCP.
 
 ## Capabilities
 
-The server exposes 35 tools over MCP, grouped into 13 categories.
+The server exposes 36 tools over MCP, grouped into 13 categories.
 
 ### Tool Groups
 
@@ -37,7 +37,7 @@ The server exposes 35 tools over MCP, grouped into 13 categories.
 | `users` | Look up and search for users |
 | `custom_fields` | Discover custom fields and their metadata/valid options |
 | `folders` | List folders within a workspace |
-| `comments` | Post comments on a runbook or task |
+| `comments` | Post and read comments on a runbook or task |
 | `activities` | Read a runbook's activity trail |
 | `action_logs` | Read the platform audit log |
 
@@ -431,6 +431,15 @@ _No parameters._
 - `runbook_id`: The runbook to comment on (string, required)
 - `content`: Comment text — a limited set of HTML tags is supported (e.g. `<p>`, `<b>`, `<ul>`, `<code>`); markdown is not rendered and disallowed tags are stripped (string, required)
 - `task_id`: Task to attach the comment to — omit to post at runbook level (string, optional)
+
+</details>
+
+<details>
+
+<summary>get_comments - List the comments on a runbook, optionally filtered to a specific task</summary>
+
+- `runbook_id`: The runbook to read comments from (string, required)
+- `task_id`: Return only the comments attached to this task — omit for every comment on the runbook, including runbook-level ones (string, optional)
 
 </details>
 

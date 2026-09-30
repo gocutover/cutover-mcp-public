@@ -235,6 +235,7 @@ class CommentResource(JsonApiObject[CommentAttributes, CommentRelationships]):
 
 # Final Comment Response Models
 CommentResponse = JsonApiSingleResponse[CommentResource]
+CommentListResponse = JsonApiListResponse[CommentResource]
 
 
 # --- Stream Models ---
