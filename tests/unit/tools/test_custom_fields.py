@@ -130,6 +130,37 @@ async def test_list_custom_fields_scope_filtering(mock_client_manager):
 
 
 @pytest.mark.asyncio
+async def test_list_custom_fields_runbook_scope_includes_dashboard_fields(mock_client_manager):
+    """The runbook scope includes dashboard fields; runbook_end and project-level fields are never returned."""
+    apply_to_by_id = {
+        "1": "runbook_edit",
+        "2": "runbook_add_edit",
+        "3": "runbook_page",
+        "4": "pir_summary",
+        "5": "pir_value_select",
+        "6": "incident_review_content",
+        "7": "runbook_end",
+        "8": "project_edit",
+        "9": "project_add_edit",
+        "10": "task_edit",
+        "11": "some_future_scope",
+    }
+    mock_client_manager.request.return_value = {
+        "data": [
+            {"id": field_id, "type": "custom_field", "attributes": {"name": f"Field {field_id}", "apply_to": apply_to}}
+            for field_id, apply_to in apply_to_by_id.items()
+        ],
+    }
+
+    result = await custom_fields.list_custom_fields(scope="runbook")
+    assert [field["id"] for field in result] == ["1", "2", "3", "4", "5", "6"]
+
+    # "all" drops only the excluded scopes, so scopes introduced later are still returned.
+    result = await custom_fields.list_custom_fields(scope="all")
+    assert [field["id"] for field in result] == ["1", "2", "3", "4", "5", "6", "10", "11"]
+
+
+@pytest.mark.asyncio
 async def test_list_custom_fields_nests_dependent_children(mock_client_manager):
     """Dependent child fields are nested under their parent and omitted from the top level."""
     mock_client_manager.request.return_value = {
@@ -212,6 +243,7 @@ async def test_list_custom_fields_skips_archived(mock_client_manager):
                 "attributes": {
                     "name": "Active Field",
                     "field_type": "text",
+                    "apply_to": "task_edit",
                     "archived": False,
                 },
             },
@@ -221,6 +253,7 @@ async def test_list_custom_fields_skips_archived(mock_client_manager):
                 "attributes": {
                     "name": "Archived Field",
                     "field_type": "text",
+                    "apply_to": "task_edit",
                     "archived": True,
                 },
             },
@@ -246,6 +279,7 @@ async def test_list_custom_fields_paginates(mock_client_manager):
                 "attributes": {
                     "name": "Priority",
                     "field_type": "text",
+                    "apply_to": "task_edit",
                     "archived": False,
                 },
             },
@@ -262,6 +296,7 @@ async def test_list_custom_fields_paginates(mock_client_manager):
                 "attributes": {
                     "name": "Region",
                     "field_type": "text",
+                    "apply_to": "task_edit",
                     "archived": False,
                 },
             },

@@ -2,6 +2,7 @@ from unittest.mock import AsyncMock
 
 import httpx
 import pytest
+from pydantic import ValidationError
 
 from cutover_mcp.tools import runbooks
 
@@ -1070,7 +1071,7 @@ async def test_update_runbook_with_custom_field_values(mock_client_manager):
 
     custom_fields = [
         {"name": "Environment", "value": "Production"},
-        {"custom_field_id": "cf789", "value": ["Region A", "Region B"]},
+        {"custom_field_id": "789", "value": ["Region A", "Region B"]},
     ]
 
     # Call the function
@@ -1088,6 +1089,31 @@ async def test_update_runbook_with_custom_field_values(mock_client_manager):
             }
         },
     )
+
+
+@pytest.mark.asyncio
+async def test_create_runbook_rejects_invalid_custom_field_values(mock_client_manager):
+    """Malformed custom_field_values fail before any request is sent."""
+    with pytest.raises(ValidationError, match="value must be a string"):
+        await runbooks.create_runbook(
+            name="New Runbook",
+            workspace_id="ws1",
+            custom_field_values=[{"custom_field_id": "111", "value": {"text": "Lessons"}}],
+        )
+
+    mock_client_manager.request.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_update_runbook_rejects_invalid_custom_field_values(mock_client_manager):
+    """Malformed custom_field_values fail before any request is sent."""
+    with pytest.raises(ValidationError, match="Extra inputs are not permitted"):
+        await runbooks.update_runbook(
+            runbook_id="rb123",
+            custom_field_values=[{"custom_field_id": "111", "value": "Lessons", "read_only": False}],
+        )
+
+    mock_client_manager.request.assert_not_called()
 
 
 @pytest.mark.asyncio

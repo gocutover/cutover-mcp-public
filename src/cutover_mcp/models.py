@@ -4,7 +4,7 @@ import inspect
 from datetime import datetime
 from typing import Any, Generic, Literal, TypeVar, Union, _GenericAlias, get_args, get_origin
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 # --- Generic JSON:API and Helper Models ---
 
@@ -132,6 +132,57 @@ class TaskLink(BaseModel):
 class TaskLinkResponse(BaseModel):
     id: int
     link_type: Literal["runbook", "snippet"]
+
+
+# NOTE: custom_field_values uses different shapes for writes and reads.
+#   CustomFieldValueInput — input; mirrors the schema the Cutover API enforces, so malformed
+#                           entries are rejected before a request is sent
+#   CustomFieldValue      — output, used in TaskAttributes/RunbookAttributes
+class CustomFieldValueInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    custom_field_id: str | None = None
+    name: str | None = None
+    value: str | list[str]
+
+    @field_validator("custom_field_id", mode="before")
+    @classmethod
+    def _coerce_custom_field_id(cls, v: Any) -> Any:
+        # The API requires the id as a string and rejects an integer, so convert it here.
+        if isinstance(v, int) and not isinstance(v, bool):
+            v = str(v)
+        if isinstance(v, str):
+            v = v.strip()
+            if not v.isdigit():
+                raise ValueError(f"custom_field_id must be a numeric id returned by list_custom_fields, got {v!r}.")
+        return v
+
+    @field_validator("value", mode="before")
+    @classmethod
+    def _check_value(cls, v: Any) -> Any:
+        if isinstance(v, int) and not isinstance(v, bool):
+            return str(v)
+        if isinstance(v, str) or (isinstance(v, list) and all(isinstance(item, str) for item in v)):
+            return v
+        raise ValueError(
+            "value must be a string, or a list of strings for multi-select fields such as checkboxes. "
+            "Objects are not accepted; for select_menu and radiobox fields, pass the option name as a "
+            f"string. Got {type(v).__name__}."
+        )
+
+    @model_validator(mode="after")
+    def _require_identifier(self) -> CustomFieldValueInput:
+        if self.custom_field_id is None and not (self.name and self.name.strip()):
+            raise ValueError(
+                "each custom_field_values entry must identify the field with custom_field_id "
+                "(preferred, as returned by list_custom_fields) or with the field's internal name."
+            )
+        return self
+
+
+def serialize_custom_field_values(values: list[CustomFieldValueInput | dict[str, Any]]) -> list[dict[str, Any]]:
+    """Validate custom_field_values and convert them into the shape the API expects."""
+    return [CustomFieldValueInput.model_validate(value).model_dump(exclude_none=True) for value in values]
 
 
 class RunbookVersionIdentifier(JsonApiIdentifier):

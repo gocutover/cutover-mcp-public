@@ -81,7 +81,7 @@ The server exposes 36 tools over MCP, grouped into 13 categories.
 - `runbook_type_id`: Runbook type to associate (string, optional)
 - `rto_start_task` / `rto_end_task`: Start/end task IDs for the RTO/RTA feature (string, optional)
 - `folder_id`: Folder to place the runbook in — defaults to the workspace's default location (string, optional)
-- `custom_field_values`: Custom field values to set, e.g. `{"name": "Field Name", "value": "value"}` (array of object, optional)
+- `custom_field_values`: Custom field values to set, including runbook dashboard fields — see [Custom Fields](#custom-fields) (array of object, optional)
 - `master_template`: Whether this runbook can generate app-specific templates — requires `is_template=true`, and the API rejects it otherwise; on rejection, surface it rather than silently setting `is_template=true` (boolean, optional)
 - `start_scheduled`: ISO 8601 timestamp, or the literal `"now"`, to schedule the start (string, optional)
 - `end_scheduled`: ISO 8601 timestamp for the scheduled end — must be omitted if `start_scheduled` isn't set (string, optional)
@@ -103,7 +103,7 @@ The server exposes 36 tools over MCP, grouped into 13 categories.
 - `rto`: Recovery Time Objective in seconds (integer, optional)
 - `timezone`: IANA timezone name (string, optional)
 - `rto_start_task` / `rto_end_task`: Start/end task IDs for the RTO/RTA feature (string, optional)
-- `custom_field_values`: Custom field values to update (array of object, optional)
+- `custom_field_values`: Custom field values to update, including runbook dashboard fields — see [Custom Fields](#custom-fields) (array of object, optional)
 - `folder_id`: Folder to move the runbook to (string, optional)
 - `master_template`: Requires `is_template=true`; the API rejects it on a non-template runbook — surface the rejection instead of auto-flipping `is_template` (boolean, optional)
 - `start_scheduled` / `end_scheduled`: ISO 8601 timestamps (or `"now"` for start) to (re)schedule the runbook (string, optional)
@@ -206,7 +206,7 @@ _No parameters._
 - `message`: Message body for an Email/SMS/Call task, or initial prompt for an agentic task (string, optional)
 - `recipients`: Recipients for a comms task (array of object, optional)
 - `assignees`: Assignees to add — only users/teams already participating on the runbook are honored, others are silently ignored (array of object, optional)
-- `custom_field_values`: Custom field values to set (array of object, optional)
+- `custom_field_values`: Custom field values to set — see [Custom Fields](#custom-fields) (array of object, optional)
 - `start_fixed` / `end_fixed`: ISO 8601 timestamps fixing start/end (string, optional)
 - `level`: level_1, level_2, or level_3 (string, optional, default level_3)
 - `auto_start`: Start automatically once predecessors complete (boolean, optional)
@@ -224,7 +224,7 @@ _No parameters._
 - `task_type_id`: Task type to associate (string, optional)
 - `stream_id`: Stream (or substream) to assign the task to (string, optional)
 - `duration`: Planned duration in seconds (integer, optional)
-- `custom_field_values`: Custom field values to update (array of object, optional)
+- `custom_field_values`: Custom field values to update — see [Custom Fields](#custom-fields) (array of object, optional)
 - `assignees`: Assignees to add — only existing runbook participants are honored; additive by default (array of object, optional)
 - `delete_excluded_assignees`: When true, replaces the full assignee list with only those provided instead of adding to it (boolean, optional, default false)
 - `task_links`: Replaces the task's links entirely — pass an empty list to clear all links (array of object, optional)
@@ -394,13 +394,15 @@ _No parameters._
 
 #### Custom Fields
 
+The runbook and task tools accept `custom_field_values` as a list of `{"custom_field_id": "123", "value": ...}` entries, where the id comes from `list_custom_fields`. A field's internal `name` can be used in place of the id, but its `display_name` cannot. Each `value` is a string, or a list of strings for multi-select fields. Malformed entries are rejected before any request is sent to Cutover.
+
 <details>
 
 <summary>list_custom_fields - List all available custom fields, to discover fields that may not have values yet</summary>
 
 - `workspace_id`: Filter to a workspace — omit to return fields from all accessible workspaces (string, optional)
 - `include_global`: When `workspace_id` is set, also include globally available fields alongside the workspace's own (boolean, optional, default true)
-- `scope`: task, runbook, or all (string, optional, default "all")
+- `scope`: task, runbook, or all (string, optional, default "all") — runbook also covers dashboard fields on the runbook homepage, PIR and Incident Review
 
 </details>
 

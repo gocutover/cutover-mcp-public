@@ -2,7 +2,15 @@ from typing import Any, Literal
 
 from cutover_mcp.app import mcp
 from cutover_mcp.clients.api import client_mgr
-from cutover_mcp.models import Assignee, Recipient, TaskLink, TaskResponse, inject_return_schema
+from cutover_mcp.models import (
+    Assignee,
+    CustomFieldValueInput,
+    Recipient,
+    TaskLink,
+    TaskResponse,
+    inject_return_schema,
+    serialize_custom_field_values,
+)
 
 
 @mcp.tool()
@@ -19,7 +27,7 @@ async def add_task_to_runbook(
     message: str | None = None,
     recipients: list[Recipient] | None = None,
     assignees: list[Assignee] | None = None,
-    custom_field_values: list[dict] | None = None,
+    custom_field_values: list[CustomFieldValueInput] | None = None,
     start_fixed: str | None = None,
     end_fixed: str | None = None,
     level: Literal["level_1", "level_2", "level_3"] | None = None,
@@ -49,9 +57,14 @@ async def add_task_to_runbook(
     :param recipients: List of recipients for a comms task (Email/SMS/Call).
     :param assignees: List of assignees to add to the task. Only users and teams that are already
         participants on the runbook can be assigned; non-participants are silently ignored by the API.
-    :param custom_field_values: List of custom field values to set. Each item should be a dict with either
-        {"name": "Field Name", "value": "value"} or {"custom_field_id": "123", "value": "value"}.
-        Value can be a string or list of strings for multi-select fields.
+    :param custom_field_values: Custom field values to set. Identify each field by
+        custom_field_id, using the id returned by list_custom_fields with scope="task":
+        {"custom_field_id": "123", "value": ...}. A field's internal ``name`` can be used instead of
+        the id, but its ``display_name`` cannot. For select_menu and radiobox fields, pass the option
+        name; for checkboxes, pass a list of option names. Pass "" to clear a field. If the API
+        reports 'Custom field "" was not found' for a valid id, the field is most likely not
+        available for the task's type. Values in the response are listed by ``name``, with
+        custom_field_id set to null.
     :param start_fixed: ISO 8601 timestamp fixing the task's start time.
     :param end_fixed: ISO 8601 timestamp fixing the task's end time.
     :param level: The task's level (default level_3).
@@ -74,7 +87,7 @@ async def add_task_to_runbook(
     if message is not None:
         attributes["message"] = message
     if custom_field_values is not None:
-        attributes["custom_field_values"] = custom_field_values
+        attributes["custom_field_values"] = serialize_custom_field_values(custom_field_values)
     if start_fixed is not None:
         attributes["start_fixed"] = start_fixed
     if end_fixed is not None:
@@ -124,7 +137,7 @@ async def update_runbook_task(
     task_type_id: str | None = None,
     stream_id: str | None = None,
     duration: int | None = None,
-    custom_field_values: list[dict] | None = None,
+    custom_field_values: list[CustomFieldValueInput] | None = None,
     assignees: list[Assignee] | None = None,
     delete_excluded_assignees: bool = False,
     task_links: list[TaskLink] | None = None,
@@ -147,9 +160,14 @@ async def update_runbook_task(
     :param task_type_id: The ID of the task type to associate with this task.
     :param stream_id: The ID of the stream to assign the task to (can be a substream).
     :param duration: Planned duration in seconds.
-    :param custom_field_values: List of custom field values to update. Each item should be a dict with either
-        {"name": "Field Name", "value": "value"} or {"custom_field_id": "123", "value": "value"}.
-        Value can be a string or list of strings for multi-select fields.
+    :param custom_field_values: Custom field values to update. Identify each field by
+        custom_field_id, using the id returned by list_custom_fields with scope="task":
+        {"custom_field_id": "123", "value": ...}. A field's internal ``name`` can be used instead of
+        the id, but its ``display_name`` cannot. For select_menu and radiobox fields, pass the option
+        name; for checkboxes, pass a list of option names. Pass "" to clear a field. If the API
+        reports 'Custom field "" was not found' for a valid id, the field is most likely not
+        available for the task's type. Values in the response are listed by ``name``, with
+        custom_field_id set to null.
     :param assignees: List of assignees to add to the task. Only users and teams that are already
         participants on the runbook can be assigned; non-participants are silently ignored by the API.
         By default these are added without removing existing assignees; set delete_excluded_assignees=True
@@ -183,7 +201,7 @@ async def update_runbook_task(
     if duration is not None:
         attributes["duration"] = duration
     if custom_field_values is not None:
-        attributes["custom_field_values"] = custom_field_values
+        attributes["custom_field_values"] = serialize_custom_field_values(custom_field_values)
     if task_links is not None:
         attributes["task_links"] = [tl.model_dump() for tl in task_links]
     if message is not None:

@@ -3,7 +3,14 @@ from urllib.parse import urlencode
 
 from cutover_mcp.app import mcp
 from cutover_mcp.clients.api import client_mgr
-from cutover_mcp.models import RunbookListResponse, RunbookResponse, TaskListResponse, inject_return_schema
+from cutover_mcp.models import (
+    CustomFieldValueInput,
+    RunbookListResponse,
+    RunbookResponse,
+    TaskListResponse,
+    inject_return_schema,
+    serialize_custom_field_values,
+)
 
 
 @mcp.tool()
@@ -206,7 +213,7 @@ async def update_runbook(
     timezone: str | None = None,
     rto_end_task: str | None = None,
     rto_start_task: str | None = None,
-    custom_field_values: list[dict] | None = None,
+    custom_field_values: list[CustomFieldValueInput] | None = None,
     folder_id: str | None = None,
     master_template: bool | None = None,
     start_scheduled: str | None = None,
@@ -225,9 +232,15 @@ async def update_runbook(
     :param timezone: IANA Timezone name (optional).
     :param rto_start_task: ID of the start task for RTO/RTA feature (optional, relationship field).
     :param rto_end_task: ID of the end task for RTO/RTA feature (optional, relationship field).
-    :param custom_field_values: List of custom field values to update. Each item should be a dict with
-        either {"name": "Field Name", "value": "value"} or {"custom_field_id": "123", "value": "value"}.
-        Value can be a string or list of strings for multi-select fields.
+    :param custom_field_values: Custom field values to update, including the runbook dashboard
+        fields on the runbook homepage (e.g. Executive summary, Additional notes), the
+        Post-Implementation Review (PIR) and the Incident Review (e.g. Incident Summary, RCA,
+        Lessons Learned). Identify each field by custom_field_id, using the id returned by
+        list_custom_fields with scope="runbook": {"custom_field_id": "123", "value": ...}. A field's
+        internal ``name`` (e.g. "dashboard:incident_review:lessons_learned") can be used instead of
+        the id, but its ``display_name`` ("Lessons Learned") cannot. For select_menu and radiobox
+        fields, pass the option name; for checkboxes, pass a list of option names. Pass "" to clear
+        a field. Values in the response are listed by ``name``, with custom_field_id set to null.
     :param folder_id: ID of the folder to move the runbook to (optional, relationship field).
     :param master_template: Whether this runbook can be used to create app-specific templates from the
         Workspace Data Sources view. Requires is_template=True; the API rejects setting this on a
@@ -258,7 +271,7 @@ async def update_runbook(
     if timezone is not None:
         attributes["timezone"] = timezone
     if custom_field_values is not None:
-        attributes["custom_field_values"] = custom_field_values
+        attributes["custom_field_values"] = serialize_custom_field_values(custom_field_values)
     if master_template is not None:
         attributes["master_template"] = master_template
     if start_scheduled is not None:
@@ -304,7 +317,7 @@ async def create_runbook(
     rto_start_task: str | None = None,
     runbook_type_id: str | None = None,
     folder_id: str | None = None,
-    custom_field_values: list[dict] | None = None,
+    custom_field_values: list[CustomFieldValueInput] | None = None,
     master_template: bool | None = None,
     start_scheduled: str | None = None,
     end_scheduled: str | None = None,
@@ -332,9 +345,15 @@ async def create_runbook(
     :param rto_end_task: ID of the end task for RTO/RTA feature (optional, relationship field).
     :param folder_id: ID of the folder to place the new runbook in (optional, relationship field).
         If omitted, the runbook lands in the workspace's default location.
-    :param custom_field_values: List of custom field values to set. Each item should be a dict with either
-        {"name": "Field Name", "value": "value"} or {"custom_field_id": "123", "value": "value"}.
-        Value can be a string or list of strings for multi-select fields.
+    :param custom_field_values: Custom field values to set, including the runbook dashboard
+        fields on the runbook homepage (e.g. Executive summary, Additional notes), the
+        Post-Implementation Review (PIR) and the Incident Review (e.g. Incident Summary, RCA,
+        Lessons Learned). Identify each field by custom_field_id, using the id returned by
+        list_custom_fields with scope="runbook": {"custom_field_id": "123", "value": ...}. A field's
+        internal ``name`` (e.g. "dashboard:incident_review:lessons_learned") can be used instead of
+        the id, but its ``display_name`` ("Lessons Learned") cannot. For select_menu and radiobox
+        fields, pass the option name; for checkboxes, pass a list of option names. Pass "" to clear
+        a field. Values in the response are listed by ``name``, with custom_field_id set to null.
     :param master_template: Whether this runbook can be used to create app-specific templates from the
         Workspace Data Sources view. Requires is_template=True; the API rejects setting this on a
         non-template runbook. Do NOT respond to that rejection by also setting is_template=True in the
@@ -372,7 +391,7 @@ async def create_runbook(
     if timezone is not None:
         attributes["timezone"] = timezone
     if custom_field_values is not None:
-        attributes["custom_field_values"] = custom_field_values
+        attributes["custom_field_values"] = serialize_custom_field_values(custom_field_values)
     if master_template is not None:
         attributes["master_template"] = master_template
     if start_scheduled is not None:

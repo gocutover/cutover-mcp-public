@@ -2,8 +2,9 @@ from unittest.mock import AsyncMock
 
 import httpx
 import pytest
+from pydantic import ValidationError
 
-from cutover_mcp.models import Assignee, Recipient, TaskLink, TaskLinkResponse
+from cutover_mcp.models import Assignee, CustomFieldValueInput, Recipient, TaskLink, TaskLinkResponse
 from cutover_mcp.tools import tasks
 
 
@@ -502,7 +503,7 @@ async def test_update_runbook_task_with_custom_field_values(mock_client_manager)
 
     custom_fields = [
         {"name": "Priority", "value": "High"},
-        {"custom_field_id": "cf456", "value": ["Option A", "Option B"]},
+        {"custom_field_id": "456", "value": ["Option A", "Option B"]},
     ]
 
     # Call the function
@@ -520,6 +521,34 @@ async def test_update_runbook_task_with_custom_field_values(mock_client_manager)
             }
         },
     )
+
+
+@pytest.mark.asyncio
+async def test_update_runbook_task_rejects_invalid_custom_field_values(mock_client_manager):
+    """Malformed custom_field_values fail before any request is sent."""
+    with pytest.raises(ValidationError, match="must identify the field with custom_field_id"):
+        await tasks.update_runbook_task(
+            runbook_id="rb123",
+            task_id="task123",
+            custom_field_values=[{"value": "Yes"}],
+        )
+
+    mock_client_manager.request.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_add_task_to_runbook_coerces_custom_field_id(mock_client_manager):
+    """Integer custom_field_id values are sent as strings, which the API requires."""
+    mock_client_manager.request.return_value = {"data": {"id": "task123", "type": "task", "attributes": {}}}
+
+    await tasks.add_task_to_runbook(
+        runbook_id="rb123",
+        name="New Task",
+        custom_field_values=[CustomFieldValueInput(custom_field_id=72, value="Yes")],
+    )
+
+    sent = mock_client_manager.request.call_args.kwargs["json_data"]["data"]["attributes"]
+    assert sent["custom_field_values"] == [{"custom_field_id": "72", "value": "Yes"}]
 
 
 @pytest.mark.asyncio
