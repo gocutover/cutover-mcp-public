@@ -23,11 +23,11 @@ An MCP server for interacting with the Cutover API, powered by FastMCP. Source l
 
 Three variables, all read from `.env` at runtime (see `src/cutover_mcp/clients/api.py`):
 
-- `CUTOVER_BASE_URL` (required) — the Cutover API host to call.
-- `CUTOVER_API_TOKEN` (required) — an API token for that host. On hosted instances, generate via Access Management (an admin generates a token for a specific user) or My Details → User App Tokens (self-service).
-- `CUTOVER_CORE_URL` (required for most hosted instances) — set to the instance's own URL. Sent as the `Core-Url` request header, telling `CUTOVER_BASE_URL` which instance to route to. Leave blank only if `CUTOVER_BASE_URL` already identifies a single instance unambiguously.
+- `CUTOVER_CORE_URL` (required for hosted instances) — the instance's own URL, e.g. `https://your-instance.cutover.com`. Sent as the `Core-Url` request header so the API routes to that instance. Leave blank only for local public-api, or when `CUTOVER_BASE_URL` already identifies a single instance.
+- `CUTOVER_API_TOKEN` (required) — an API token for that instance. On hosted instances, generate via Access Management (an admin generates a token for a specific user) or My Details → User App Tokens (self-service).
+- `CUTOVER_BASE_URL` (optional) — the Cutover API host. Derived from `CUTOVER_CORE_URL` when unset (`https://api.cutover.net` for production instances; other environments get `https://api.<environment domain>`). Only Cutover-hosted instance URLs are derived; anything else (e.g. a local `core` on `localhost`) raises a `ValueError` asking for `CUTOVER_BASE_URL`. Set it for a single-tenant instance with its own API host, or for local public-api (`http://localhost:9292`).
 
-If you don't have real credentials available, ask the user for values rather than inventing them — the server cannot start without a valid `CUTOVER_BASE_URL`/`CUTOVER_API_TOKEN` pair, and it will raise a clear `ValueError` if either is missing.
+If you don't have real credentials available, ask the user for values rather than inventing them — the first tool call raises a clear `ValueError` if `CUTOVER_API_TOKEN` is missing, or if neither `CUTOVER_CORE_URL` nor `CUTOVER_BASE_URL` is set.
 
 ## Running the server
 

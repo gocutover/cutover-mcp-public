@@ -8,6 +8,7 @@ An MCP server for interacting with the Cutover API, powered by FastMCP.
 - [Installation](#installation)
 - [Setup](#setup)
 - [Environment Configuration](#environment-configuration)
+  - [Which URLs do I need?](#which-urls-do-i-need)
   - [Environment Variables Reference](#environment-variables-reference)
   - [Generating an API Token](#generating-an-api-token)
 - [Security & Responsible Use](#security--responsible-use)
@@ -498,13 +499,24 @@ This project requires Python 3.13+ — `uv` installs and manages the right inter
 
 ## Environment Configuration
 
+### Which URLs do I need?
+
+For most instances, one URL and a token:
+
+```
+CUTOVER_CORE_URL=https://your-instance.cutover.com
+CUTOVER_API_TOKEN=MY_TOKEN_VALUE
+```
+
+`CUTOVER_CORE_URL` is your Cutover instance URL, the one you open in the browser. The API host (`CUTOVER_BASE_URL`) defaults to `https://api.cutover.net`, which serves every shared production instance, so leave it unset unless your instance has its own API host (single-tenant deployments, typically `https://api.your-instance.cutover.com`). The default only applies to Cutover-hosted instance URLs; for any other instance URL the server asks you to set `CUTOVER_BASE_URL` rather than guess. If a call fails with an authorization error the message says how to override it; ask your Cutover contact if you are unsure which applies.
+
 ### Environment Variables Reference
 
-| Variable            | Required                | Notes                                                          |
-| ------------------- | ----------------------- | -------------------------------------------------------------- |
-| `CUTOVER_BASE_URL`  | Yes                     | Your Cutover instance's API host.                              |
-| `CUTOVER_API_TOKEN` | Yes                     | See [Generating an API Token](#generating-an-api-token) below. |
-| `CUTOVER_CORE_URL`  | Yes, for most instances | Your Cutover instance's URL.                                   |
+| Variable            | Required | Notes                                                                                                                                                        |
+| ------------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `CUTOVER_CORE_URL`  | Yes      | Your Cutover instance URL, e.g. `https://your-instance.cutover.com`. Sent as the `Core-Url` header so the API routes to your instance.                        |
+| `CUTOVER_API_TOKEN` | Yes      | See [Generating an API Token](#generating-an-api-token) below.                                                                                               |
+| `CUTOVER_BASE_URL`  | No       | The Cutover API host. Defaults to `https://api.cutover.net`. Set it only for an instance with its own API host, e.g. `https://api.your-instance.cutover.com`. |
 
 ### Generating an API Token
 

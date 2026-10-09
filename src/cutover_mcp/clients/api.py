@@ -2,6 +2,7 @@ import asyncio
 import logging
 import os
 from typing import Any
+from urllib.parse import urlparse
 
 import httpx
 from pydantic import BaseModel, Field
@@ -10,37 +11,136 @@ from cutover_mcp import __version__
 
 logger = logging.getLogger(__name__)
 
+DEFAULT_BASE_URL = "https://api.cutover.net"
+
+# Production instances (<name>.cutover.com / .cutover.net) share one API host. Any
+# other Cutover environment (<name>.<env>.cutover.cloud) exposes its API at api.<env>.cutover.cloud.
+_SHARED_PRODUCTION_DOMAINS = {"cutover.com", "cutover.net"}
+_ENVIRONMENT_DOMAIN = "cutover.cloud"
+
+# How each setting is supplied: an env var over stdio, a header on the hosted server.
+_CORE_URL_SETTING = "CUTOVER_CORE_URL (or the Core-Url header on the hosted server)"
+_BASE_URL_SETTING = "CUTOVER_BASE_URL (or the Base-Url header on the hosted server)"
+
+# Hints added when the API host was derived rather than configured. A wrong host shows
+# up as a 401 (that host does not know the token) or as the host failing to serve the
+# request at all. A 403 is a valid token without permission and a 400 a bad payload, so
+# neither gets a hint: it would steer the client towards configuration instead of the cause.
+_DEFAULTED_HOST_AUTH_HINT = (
+    "Check that the token is valid for {core_url}. The API host {base_url} was derived from that "
+    "instance URL; if your instance has its own API host (single-tenant), set " + _BASE_URL_SETTING + " to it."
+)
+# Statuses that mean the API host itself could not serve the request (a gateway in
+# front of it answered). A 500 means the request reached an API and failed inside it.
+_GATEWAY_STATUS_CODES = {502, 503, 504}
+
+# A response body is only worth quoting in an error when it is a short plain message.
+# Gateway error pages are HTML and would swamp the error with markup.
+_MAX_QUOTED_BODY = 300
+
+_DEFAULTED_HOST_UNREACHABLE_HINT = (
+    "The API host {base_url} was derived from the instance URL {core_url} and could not serve the request; "
+    "if your instance has its own API host (single-tenant), set " + _BASE_URL_SETTING + " to it."
+)
+
+
+def default_base_url(core_url: str | None) -> str | None:
+    """Pick the Cutover API host for ``core_url`` when CUTOVER_BASE_URL is not set.
+
+    Production tenants share one API host; other Cutover environments expose
+    theirs at ``api.<environment domain>``. Single-tenant instances have a
+    dedicated ``https://api.<instance>`` host and should set CUTOVER_BASE_URL
+    explicitly.
+
+    Only the two shapes real instance URLs take are recognised, each with exactly one
+    label for the instance name. Anything else (localhost, a customer's own domain, a
+    nested subdomain) returns None: guessing there would send the token to an API host
+    that was never meant to see it, so the caller must insist on an explicit
+    CUTOVER_BASE_URL instead.
+    """
+    host = (urlparse(core_url).hostname or "").lower() if core_url else ""
+    labels = host.split(".")
+    if len(labels) == 3 and ".".join(labels[1:]) in _SHARED_PRODUCTION_DOMAINS:
+        return DEFAULT_BASE_URL
+    if len(labels) == 4 and ".".join(labels[2:]) == _ENVIRONMENT_DOMAIN:
+        return f"https://api.{labels[1]}.{_ENVIRONMENT_DOMAIN}"
+    return None
+
+
+def normalise_core_url(core_url: str | None) -> str | None:
+    """Add the https scheme when it was dropped, e.g. copied from a browser bar that hides it.
+
+    public-api requires an absolute Core-Url, so a scheme-less value could never work as is,
+    and without this the host derivation would wrongly report it as not a Cutover URL.
+    """
+    core_url = (core_url or "").strip()
+    if not core_url:
+        return None
+    return core_url if "://" in core_url else f"https://{core_url}"
+
 
 class CutoverCredentials(BaseModel):
     """Requested from the user via an interactive elicitation form."""
 
-    base_url: str = Field(
-        description="The Cutover API endpoint for your environment, e.g. "
-        "https://api.cutover.com."
-    )
     core_url: str = Field(
-        description="The Cutover server URL you want to connect to. Must be an "
-        "absolute URL with scheme, e.g. https://your-instance.cutover.com."
+        description="Your Cutover instance URL. Must be an absolute URL with scheme, "
+        "e.g. https://your-instance.cutover.com."
     )
-    api_token: str = Field(description="Your personal Cutover API token for that server.")
+    api_token: str = Field(description="Your personal Cutover API token for that instance.")
+    base_url: str = Field(
+        default="",
+        description="The Cutover API host. Leave blank to use the default for your "
+        "instance (https://api.cutover.net for production). Set it only if your "
+        "instance has its own API host, e.g. https://api.your-instance.cutover.com.",
+    )
 
 
 class CutoverAPIError(Exception):
-    """Raised for Cutover API failures that should be surfaced to the caller as a
-    structured, user-facing error rather than retried as a transient fault.
+    """Raised for Cutover API failures surfaced to the caller as a structured,
+    user-facing error: 4xx straight away, 5xx once retries are exhausted.
 
-    ``messages`` carries the parsed user-facing error strings from the response
-    body so callers (e.g. AI tools) can surface them to the user instead of the
-    generic ``Client error 'XXX ...' for url '...'`` message emitted by
-    ``httpx.HTTPStatusError``.
+    ``messages`` carries the parsed error strings from a JSON body so callers
+    (e.g. AI tools) can show them instead of the generic ``Client error 'XXX ...'
+    for url '...'`` message emitted by ``httpx.HTTPStatusError``. A short plain-text
+    body is quoted as is; anything else (a gateway's HTML error page, an empty body)
+    collapses to ``HTTP <status> from <url>``. ``raw_body`` always keeps the original.
     """
 
-    def __init__(self, status_code: int, url: str, messages: list[str], raw_body: str = ""):
+    def __init__(self, status_code: int, url: str, messages: list[str], raw_body: str = "", hint: str | None = None):
         self.status_code = status_code
         self.url = url
         self.messages = messages
         self.raw_body = raw_body
-        detail = "; ".join(messages) if messages else raw_body or f"HTTP {status_code}"
+        self.hint = hint
+        if messages:
+            detail = "; ".join(messages)
+        elif _quotable(raw_body):
+            detail = raw_body.strip()
+        else:
+            detail = f"HTTP {status_code} from {url}"
+        if hint:
+            detail = f"{detail} {hint}"
+        super().__init__(detail)
+
+
+def _quotable(raw_body: str) -> bool:
+    body = raw_body.strip()
+    return bool(body) and len(body) <= _MAX_QUOTED_BODY and not body.startswith("<")
+
+
+class CutoverConnectionError(Exception):
+    """Raised when the API host could not be reached after retries.
+
+    Replaces the bare ``httpx.RequestError`` so the message, which is all an MCP client
+    sees, can carry the derived-host hint.
+    """
+
+    def __init__(self, url: str, cause: Exception, hint: str | None = None):
+        self.url = url
+        self.hint = hint
+        detail = f"Could not reach {url}: {cause}"
+        if hint:
+            detail = f"{detail} {hint}"
         super().__init__(detail)
 
 
@@ -83,11 +183,21 @@ class APIClient:
     This class should not be instantiated directly; use the client_mgr.
     """
 
-    def __init__(self, base_url: str, api_key: str, timeout: float = 30.0, core_url: str | None = None):
+    def __init__(
+        self,
+        base_url: str,
+        api_key: str,
+        timeout: float = 30.0,
+        core_url: str | None = None,
+        base_url_defaulted: bool = False,
+    ):
         self.base_url = base_url.rstrip("/")
         self.api_key = api_key
         self.timeout = timeout
         self.core_url = core_url
+        # True when base_url came from default_base_url() rather than config, so
+        # errors that smell like a wrong API host can say how to override it.
+        self.base_url_defaulted = base_url_defaulted
         self._client: httpx.AsyncClient | None = None
 
     async def _get_client(self) -> httpx.AsyncClient:
@@ -141,20 +251,39 @@ class APIClient:
                     and 400 <= e.response.status_code < 500
                     and e.response.status_code != 429
                 ):
-                    if isinstance(e, httpx.HTTPStatusError) and 400 <= e.response.status_code < 500:
-                        logger.warning("API client error for %s: %s", url, e.response.text)
+                    if isinstance(e, httpx.HTTPStatusError):
+                        status = e.response.status_code
+                        logger.warning("API error %s for %s: %s", status, url, e.response.text)
                         raise CutoverAPIError(
-                            status_code=e.response.status_code,
+                            status_code=status,
                             url=url,
                             messages=_parse_error_messages(e.response),
                             raw_body=e.response.text,
+                            hint=self._defaulted_host_hint(status),
                         ) from e
                     logger.error("API request failed for %s: %s", url, e)
-                    raise
+                    raise CutoverConnectionError(url, e, hint=self._defaulted_host_hint(None)) from e
                 delay = 2**attempt
                 logger.warning("API error for %s: %s. Retrying in %ss", url, e, delay)
                 await asyncio.sleep(delay)
         raise ConnectionError("API request failed after multiple retries.")  # Should not be reached
+
+    def _defaulted_host_hint(self, status_code: int | None) -> str | None:
+        """The override hint for a failure that may stem from a derived API host, else None.
+
+        401: that host does not know the token. 502/503/504 or no response at all: the
+        host could not serve the request, e.g. the shared API cannot reach the instance
+        behind it. A 500 reached an API and failed inside it, so it gets no hint.
+        """
+        if not self.base_url_defaulted:
+            return None
+        if status_code == 401:
+            template = _DEFAULTED_HOST_AUTH_HINT
+        elif status_code is None or status_code in _GATEWAY_STATUS_CODES:
+            template = _DEFAULTED_HOST_UNREACHABLE_HINT
+        else:
+            return None
+        return template.format(base_url=self.base_url, core_url=self.core_url)
 
 
 def _credentials_from_http_headers() -> tuple[str | None, str | None, str | None]:
@@ -202,7 +331,8 @@ async def _credentials_from_elicitation() -> tuple[str | None, str | None, str |
 
     try:
         result = await ctx.elicit(
-            "Enter the Cutover API endpoint, server URL, and your personal API token to continue.",
+            "Enter your Cutover instance URL and personal API token to continue. "
+            "The API host can be left blank unless your instance has its own.",
             CutoverCredentials,
         )
     except Exception:
@@ -212,10 +342,11 @@ async def _credentials_from_elicitation() -> tuple[str | None, str | None, str |
     if result.action != "accept":
         return None, None, None
 
+    base_url = result.data.base_url.strip() or None
     await ctx.set_state("cutover_api_key", result.data.api_token)
     await ctx.set_state("cutover_core_url", result.data.core_url)
-    await ctx.set_state("cutover_base_url", result.data.base_url)
-    return result.data.api_token, result.data.core_url, result.data.base_url
+    await ctx.set_state("cutover_base_url", base_url)
+    return result.data.api_token, result.data.core_url, base_url
 
 
 class APIClientManager:
@@ -229,6 +360,10 @@ class APIClientManager:
     targeting different Cutover environments). Falls back to env vars for
     stdio / local development, and as a last resort prompts the connected
     client interactively (session-cached) if it supports elicitation.
+
+    The base URL is optional everywhere: when absent it is derived from the
+    Core-Url with default_base_url(), so shared production tenants only need
+    an instance URL and a token.
     """
 
     def __init__(self):
@@ -237,23 +372,42 @@ class APIClientManager:
     async def get_client(self) -> APIClient:
         """Gets a client, preferring per-request HTTP credentials over env vars."""
         header_api_key, header_core_url, header_base_url = _credentials_from_http_headers()
-        api_key = header_api_key or os.getenv("CUTOVER_API_TOKEN")
-        core_url = header_core_url or os.getenv("CUTOVER_CORE_URL")
-        base_url = header_base_url or os.getenv("CUTOVER_BASE_URL")
+        api_key = header_api_key or os.getenv("CUTOVER_API_TOKEN") or None
+        core_url = normalise_core_url(header_core_url or os.getenv("CUTOVER_CORE_URL"))
+        base_url = header_base_url or os.getenv("CUTOVER_BASE_URL") or None
 
         if not api_key:
             elicited_key, elicited_core_url, elicited_base_url = await _credentials_from_elicitation()
             if elicited_key:
                 api_key = elicited_key
-                core_url = core_url or elicited_core_url
+                core_url = core_url or normalise_core_url(elicited_core_url)
                 base_url = base_url or elicited_base_url
 
-        if not base_url or not api_key:
-            raise ValueError("CUTOVER_BASE_URL and CUTOVER_API_TOKEN must be set.")
+        if not api_key:
+            raise ValueError("CUTOVER_API_TOKEN must be set (or sent as an Authorization: Bearer header).")
+        if not base_url and not core_url:
+            raise ValueError(
+                f"Set {_CORE_URL_SETTING} to your Cutover instance URL, e.g. https://your-instance.cutover.com, "
+                f"or {_BASE_URL_SETTING} if your instance has its own API host."
+            )
 
-        key = f"{base_url}|{api_key}|{core_url}"
+        base_url_defaulted = base_url is None
+        if base_url_defaulted:
+            base_url = default_base_url(core_url)
+            if base_url is None:
+                raise ValueError(
+                    f"Cannot derive the Cutover API host from the instance URL {core_url}: it is not a "
+                    f"Cutover-hosted instance URL. Set {_BASE_URL_SETTING} explicitly, "
+                    "e.g. http://localhost:9292 for a local public-api."
+                )
+
+        # base_url_defaulted is part of the key: the same host reached explicitly and by
+        # default must not share a client, or the override hint would be wrong for one.
+        key = f"{base_url}|{api_key}|{core_url}|{base_url_defaulted}"
         if key not in self._clients:
-            self._clients[key] = APIClient(base_url, api_key, core_url=core_url)
+            if base_url_defaulted:
+                logger.info("No API host configured; derived %s from the instance URL %s", base_url, core_url)
+            self._clients[key] = APIClient(base_url, api_key, core_url=core_url, base_url_defaulted=base_url_defaulted)
         return self._clients[key]
 
     async def close_all(self) -> None:
