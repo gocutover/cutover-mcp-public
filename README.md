@@ -22,7 +22,7 @@ An MCP server for interacting with the Cutover API, powered by FastMCP.
 
 ## Capabilities
 
-The server exposes 36 tools over MCP, grouped into 13 categories.
+The server exposes 43 tools over MCP, grouped into 13 categories.
 
 ### Tool Groups
 
@@ -36,7 +36,7 @@ The server exposes 36 tools over MCP, grouped into 13 categories.
 | `workspaces` | List, search, fetch, and create workspaces |
 | `teams` | Look up teams associated with a runbook |
 | `users` | Look up and search for users |
-| `custom_fields` | Discover custom fields and their metadata/valid options |
+| `custom_fields` | Discover custom fields and their metadata/valid options, and create, update and archive field definitions and groups |
 | `folders` | List folders within a workspace |
 | `comments` | Post and read comments on a runbook or task |
 | `activities` | Read a runbook's activity trail |
@@ -409,9 +409,83 @@ The runbook and task tools accept `custom_field_values` as a list of `{"custom_f
 
 <details>
 
-<summary>get_custom_field - Get a custom field's metadata including its type and valid options</summary>
+<summary>get_custom_field - Get a custom field's metadata including its type, valid options, group and constraints</summary>
 
 - `custom_field_id`: The custom field to retrieve (string, required)
+
+</details>
+
+The tools below change field definitions (the Custom Fields admin page), not the values on a runbook or task. They need the Custom Fields Admin or Global Admin role.
+
+<details>
+
+<summary>create_custom_field - Create a custom field definition</summary>
+
+- `name`: The field's name (string, required). The API sets the UI label to the same value
+- `field_type`: text, textarea, select_menu, radiobox, checkboxes, datetime or user_select (string, required)
+- `apply_to`: runbook_add_edit, runbook_edit, runbook_page, task_add_edit, task_edit, task_start or task_end (string, required)
+- `workspace_id`: The workspace that owns the field (string, required unless `global_field` is true)
+- `global_field`: Create the field for every workspace (boolean, optional, default false)
+- `field_options`: Option names — required for select_menu, radiobox and checkboxes, rejected otherwise (array of string, optional)
+- `required`, `allow_field_creation`, `display_list`, `display_search`, `display_table`: Field settings (boolean, optional)
+- `default_value`: The value a new runbook or task starts with (string, optional)
+- `custom_field_group_id`: The group to show the field in (string, optional)
+- `task_type_ids`, `runbook_type_ids`: Limit the field to these task or runbook types (array of string, optional)
+
+</details>
+
+<details>
+
+<summary>update_custom_field - Update a custom field definition</summary>
+
+- `custom_field_id`: The field to update (string, required)
+- `name`: The new name (string, optional)
+- `add_field_options`: Option names to add to a select_menu, radiobox or checkboxes field; existing options are kept, and other field types are rejected (array of string, optional)
+- `required`, `allow_field_creation`, `display_list`, `display_search`, `display_table`: Field settings (boolean, optional)
+- `default_value`: The value a new runbook or task starts with (string, optional)
+- `custom_field_group_id`: Move the field to this group, or `""` to take it out of its group; omitted, the field stays in its current group (string, optional)
+- `task_type_ids`, `runbook_type_ids`: Replace the constraints of that type; the other type is kept, and an empty list is rejected because the API cannot clear them (array of string, optional)
+
+</details>
+
+<details>
+
+<summary>archive_custom_field - Archive a custom field definition</summary>
+
+- `custom_field_id`: The field to archive (string, required)
+
+</details>
+
+<details>
+
+<summary>list_custom_field_groups - List custom field groups</summary>
+
+Takes no parameters. Archived groups are not returned; the API does not list them.
+
+</details>
+
+<details>
+
+<summary>create_custom_field_group - Create a custom field group</summary>
+
+- `name`: The group's name (string, required)
+
+</details>
+
+<details>
+
+<summary>update_custom_field_group - Rename a custom field group</summary>
+
+- `custom_field_group_id`: The group to rename (string, required)
+- `name`: The new name (string, required)
+
+</details>
+
+<details>
+
+<summary>archive_custom_field_group - Archive a custom field group</summary>
+
+- `custom_field_group_id`: The group to archive (string, required)
 
 </details>
 
