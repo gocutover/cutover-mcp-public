@@ -22,7 +22,7 @@ An MCP server for interacting with the Cutover API, powered by FastMCP.
 
 ## Capabilities
 
-The server exposes 43 tools over MCP, grouped into 13 categories.
+The server exposes 44 tools over MCP, grouped into 13 categories.
 
 ### Tool Groups
 
@@ -31,7 +31,7 @@ The server exposes 43 tools over MCP, grouped into 13 categories.
 | `runbooks` | Create, read, update, and control the lifecycle of runbooks and templates |
 | `runbook_types` | List, fetch, and query runbook types |
 | `tasks` | Read, add, update, and progress (start/complete/skip/delete) tasks within a runbook |
-| `task_types` | Look up task types |
+| `task_types` | Look up task types, including integration-backed and agentic (AI agent) task types |
 | `streams` | Create, read, update, and delete streams and substreams within a runbook |
 | `workspaces` | List, search, fetch, and create workspaces |
 | `teams` | Look up teams associated with a runbook |
@@ -199,7 +199,7 @@ _No parameters._
 - `runbook_id`: The runbook to add the task to (string, required)
 - `name`: Task name (string, required)
 - `description`: Task description (string, optional)
-- `task_type_id`: Task type to associate (string, optional)
+- `task_type_id`: Task type id from `list_task_types`, which includes integration-backed and agentic types (string, optional)
 - `stream_id`: Stream (or substream) to assign the task to (string, optional)
 - `predecessors`: Task IDs that are predecessors to this task (array of string, optional)
 - `duration`: Planned duration in seconds (integer, optional)
@@ -222,7 +222,7 @@ _No parameters._
 - `runbook_id` / `task_id`: The runbook and task to update (string, required)
 - `name` / `description`: New name/description (string, optional)
 - `predecessors`: Task IDs that are predecessors to this task (array of string, optional)
-- `task_type_id`: Task type to associate (string, optional)
+- `task_type_id`: Task type id from `list_task_types`, which includes integration-backed and agentic types (string, optional)
 - `stream_id`: Stream (or substream) to assign the task to (string, optional)
 - `duration`: Planned duration in seconds (integer, optional)
 - `custom_field_values`: Custom field values to update — see [Custom Fields](#custom-fields) (array of object, optional)
@@ -274,9 +274,17 @@ _No parameters._
 
 <details>
 
-<summary>list_task_types - List all task types</summary>
+<summary>list_task_types - List all task types, including integration-backed ones (Jenkins, ServiceNow, webhooks, AI agent tasks); each carries a `meta.integration_action` object (`kind`, `description`, `hooks`, `definition`)</summary>
 
-_No parameters._
+- `include_integration`: Include task types backed by an integration action (boolean, optional, default true)
+
+</details>
+
+<details>
+
+<summary>get_integration_task_type_details - Summarise how an integration-backed task type is configured (descriptive settings only, never credentials); needs an integrations-admin or stakeholder role</summary>
+
+- `integration_action_id`: The integration action id from the task type's `integration_action` relationship (string, required)
 
 </details>
 

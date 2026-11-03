@@ -40,7 +40,9 @@ async def add_task_to_runbook(
     :param runbook_id: The ID of the runbook to add the task to.
     :param name: The name of the new task.
     :param description: An optional description for the task.
-    :param task_type_id: The ID of the task type to associate with this task.
+    :param task_type_id: Task type ID from ``list_task_types``, which also lists integration-backed
+        types (Jenkins, ServiceNow, custom integrations, AI agent tasks, ...); never ask the user
+        for the id.
     :param stream_id: The ID of the stream to assign the task to (can be a substream).
     :param predecessors: A list of task IDs that are predecessors to this task.
     :param duration: Planned duration in seconds.
@@ -52,8 +54,10 @@ async def add_task_to_runbook(
         freshly-spawned copy of the template, not the template itself, and the task's name is
         overwritten with the target's name. Use ``link_type="snippet"`` to attach one or more
         snippets.
-    :param message: The message body for an Email/SMS/Call comms task, or the initial prompt for
-        an agentic task.
+    :param message: For an Email/SMS/Call comms task type, the message body. For an agentic task
+        type, the initial prompt: the instructions the AI agent receives when the task starts.
+        Always set it for comms and agentic tasks; if the user did not supply one, draft it from
+        the task name, description and the runbook context.
     :param recipients: List of recipients for a comms task (Email/SMS/Call).
     :param assignees: List of assignees to add to the task. Only users and teams that are already
         participants on the runbook can be assigned; non-participants are silently ignored by the API.
@@ -157,7 +161,8 @@ async def update_runbook_task(
     :param name: The new name for the task.
     :param description: The new description for the task.
     :param predecessors: A list of task IDs that are predecessors to this task.
-    :param task_type_id: The ID of the task type to associate with this task.
+    :param task_type_id: Task type ID from ``list_task_types`` (integration-backed and agentic types
+        included) to change what kind of task this is.
     :param stream_id: The ID of the stream to assign the task to (can be a substream).
     :param duration: Planned duration in seconds.
     :param custom_field_values: Custom field values to update. Identify each field by
@@ -177,8 +182,9 @@ async def update_runbook_task(
     :param task_links: Replaces the task's links to other resources. Use ``link_type="runbook"`` to link
         a task to a template runbook — the target must be a template runbook and must have ≥1 task. Use
         ``link_type="snippet"`` to attach one or more snippets. Pass an empty list to clear all links.
-    :param message: The message body for an Email/SMS/Call comms task, or the initial prompt for
-        an agentic task.
+    :param message: For an Email/SMS/Call comms task, the message body. For an agentic task, the
+        initial prompt the AI agent receives when the task starts: when the user asks to set,
+        change or rewrite an agentic task's prompt or instructions, update this field.
     :param recipients: List of recipients for a comms task (Email/SMS/Call).
     :param start_fixed: ISO 8601 timestamp fixing the task's start time.
     :param end_fixed: ISO 8601 timestamp fixing the task's end time.
