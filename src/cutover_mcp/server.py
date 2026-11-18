@@ -16,6 +16,7 @@ from cutover_mcp.tools import (  # noqa: F401
     activities,
     comments,
     custom_fields,
+    data_sources,
     folders,
     runbook_types,
     runbooks,

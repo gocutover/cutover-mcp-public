@@ -22,7 +22,7 @@ An MCP server for interacting with the Cutover API, powered by FastMCP.
 
 ## Capabilities
 
-The server exposes 44 tools over MCP, grouped into 13 categories.
+The server exposes 45 tools over MCP, grouped into 14 categories.
 
 ### Tool Groups
 
@@ -37,6 +37,7 @@ The server exposes 44 tools over MCP, grouped into 13 categories.
 | `teams` | Look up teams associated with a runbook |
 | `users` | Look up and search for users |
 | `custom_fields` | Discover custom fields and their metadata/valid options, and create, update and archive field definitions and groups |
+| `data_sources` | Get a signed URL to upload the file a data source reads from |
 | `folders` | List folders within a workspace |
 | `comments` | Post and read comments on a runbook or task |
 | `activities` | Read a runbook's activity trail |
@@ -494,6 +495,19 @@ Takes no parameters. Archived groups are not returned; the API does not list the
 <summary>archive_custom_field_group - Archive a custom field group</summary>
 
 - `custom_field_group_id`: The group to archive (string, required)
+
+</details>
+
+#### Data Sources
+
+<details>
+
+<summary>get_data_source_upload_url - Get a signed URL to upload a file for a data source</summary>
+
+- `file_name`: Name of the file to upload, e.g. `cmdb.csv` (string, required)
+- `data_source_id`: An existing data source to upload a new version of the file for; omit for the first upload (integer, optional)
+
+The server cannot read files on your machine, so the agent uploads the file itself with an HTTP `PUT` to the returned `url` before it expires (`expires_in` seconds), then creates the data source with the returned `datasource_endpoint_url` as its URL. A new version for an existing data source is only read if the returned `datasource_endpoint_url` is that data source's current URL; refresh and sync the data source afterwards. Fails with a clear error if the instance's data source search service is not configured.
 
 </details>
 
