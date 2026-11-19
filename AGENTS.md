@@ -13,6 +13,8 @@ An MCP server for interacting with the Cutover API, powered by FastMCP. Source l
 
 ## Setup
 
+End users don't clone this repository: each release is published to PyPI and MCP clients run it as `uvx cutover-mcp` with credentials in the client's `env` block (see `mcp.json.example` / `claude_desktop_config.json.example`). The steps below are for working on the server itself.
+
 1. Copy `.env.example` to `.env` and fill in the required values (see "Environment variables" below).
 2. Install dependencies:
    ```sh
@@ -32,8 +34,10 @@ If you don't have real credentials available, ask the user for values rather tha
 ## Running the server
 
 ```sh
-uv run python src/cutover_mcp/server.py
+uv run cutover-mcp
 ```
+
+This is the `cutover-mcp` console script (`cutover_mcp.server:main`, declared in `pyproject.toml`) that `uvx cutover-mcp` and the Docker image run; `uv run python src/cutover_mcp/server.py` is equivalent.
 
 ## Running via Docker
 
@@ -58,6 +62,7 @@ uv run pytest
 - `src/cutover_mcp/resources/` — Resource definitions (MCP endpoints)
 - `src/cutover_mcp/tools/` — Tool logic
 - `src/cutover_mcp/server.py` — FastMCP server entrypoint
+- `server.json` — MCP Registry entry (`io.github.gocutover/cutover-mcp`); `.github/workflows/publish.yml` stamps the release version in and publishes it after the PyPI upload
 - `tests/` — Tests
 
 ## Conventions

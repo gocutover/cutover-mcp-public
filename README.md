@@ -2,6 +2,8 @@
 
 An MCP server for interacting with the Cutover API, powered by FastMCP.
 
+<!-- mcp-name: io.github.gocutover/cutover-mcp -->
+
 ## Contents
 
 - [Capabilities](#capabilities)
@@ -569,15 +571,25 @@ This includes both read and write tools — see [Security & Responsible Use](#se
 
 ## Installation
 
-To set up the project, ensure you have the required dependencies installed. For macOS users, you can install `uv` using Homebrew:
+The server is published on PyPI as [`cutover-mcp`](https://pypi.org/project/cutover-mcp/) and runs with [`uv`](https://docs.astral.sh/uv/), which downloads Python 3.13+ on demand, so `uv` is the only prerequisite. On macOS:
 
 ```bash
 brew install uv
 ```
 
-This project requires Python 3.13+ — `uv` installs and manages the right interpreter automatically, so you don't need to install Python separately.
+Other platforms: see the [uv installation guide](https://docs.astral.sh/uv/getting-started/installation/).
+
+Then point your MCP client at `uvx cutover-mcp` with your credentials in its `env` block — see [Client Setup](#client-setup). `uvx` downloads the latest release on first run and caches it; pin a version with `uvx cutover-mcp@1.2.3`. No clone, no virtualenv.
+
+To start it from a terminal instead (it waits for an MCP client on stdin, so it will look idle; Ctrl+C to stop):
+
+```sh
+CUTOVER_BASE_URL=https://api.cutover.net CUTOVER_API_TOKEN=your_token_here CUTOVER_CORE_URL=https://YOUR-INSTANCE-NAME.cutover.com uvx cutover-mcp
+```
 
 ## Setup
+
+Only needed to work on the server itself or to run an unreleased build; to just use it, see [Installation](#installation) above.
 
 1. Copy `.env.example` to `.env` and fill in your Cutover API credentials — see [Environment Configuration](#environment-configuration) below.
 2. Install dependencies with uv:
@@ -586,8 +598,9 @@ This project requires Python 3.13+ — `uv` installs and manages the right inter
    ```
 3. Run the server using:
    ```sh
-   uv run python src/cutover_mcp/server.py
+   uv run cutover-mcp
    ```
+   That is the same console script `uvx cutover-mcp` runs; `uv run python src/cutover_mcp/server.py` works too.
 4. Run tests:
    ```sh
    uv run pytest
@@ -637,13 +650,14 @@ The MCP server adds no security model of its own — it authenticates to the Cut
 - `clients/` - API client
 - `resources/` - Resource definitions (MCP endpoints)
 - `tools/` - Tool logic
-- `server.py` - FastMCP server entrypoint
+- `server.py` - FastMCP server entrypoint (`main()` is the `cutover-mcp` console script)
+- `server.json` - The server's [MCP Registry](https://registry.modelcontextprotocol.io) entry
 - `tests/` - Tests
 
 ## Notes
 
 - Dependency and environment management is handled by [uv](https://github.com/astral-sh/uv) and [hatchling](https://hatch.pypa.io/).
-- Versioned releases and the changelog live under [Releases](https://github.com/gocutover/cutover-mcp-public/releases). The server reports its version as `serverInfo.version` and from `GET /health` when running over HTTP.
+- Versioned releases and the changelog live under [Releases](https://github.com/gocutover/cutover-mcp-public/releases). Each release is published to [PyPI](https://pypi.org/project/cutover-mcp/) and listed in the [MCP Registry](https://registry.modelcontextprotocol.io) as `io.github.gocutover/cutover-mcp`. The server reports its version as `serverInfo.version` and from `GET /health` when running over HTTP.
 
 ## Client Setup
 
@@ -651,8 +665,8 @@ The MCP server adds no security model of its own — it authenticates to the Cut
 
 If you want to use VS Code with GitHub Copilot to call out to this MCP server, you can use `mcp.json.example`.
 
-1. Copy `mcp.json.example` to `.vscode/mcp.json` (create the `.vscode/` directory if not already present)
-2. Change the `Users/YOUR-USER-NAME/...` example path to point at your working directory instead (the example uses a macOS-style path — adjust the format for Windows if needed)
+1. Copy `mcp.json.example` to `.vscode/mcp.json` (create the `.vscode/` directory if not already present). It runs `uvx cutover-mcp` and prompts for your API token the first time the server starts, so the token is never written into the project.
+2. Set `CUTOVER_BASE_URL` and `CUTOVER_CORE_URL` in its `env` block for your instance — see [Environment Configuration](#environment-configuration).
 3. Restart VS Code for the changes to take effect. In the Copilot Chat box, click the **Configure tools** icon and expand `cutover-mcp` to see its full list of tools. MCP tools only run in Agent mode — switch the mode dropdown from Ask to Agent if nothing happens.
 
 ### Run in Claude Desktop
@@ -661,14 +675,14 @@ If you'd rather use Claude Desktop instead of an IDE, you can set that up:
 
 1. [Download and install Claude Desktop](https://www.anthropic.com/claude/desktop).
 2. Copy `claude_desktop_config.json.example` to `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS path shown; on Windows, use `%APPDATA%\Claude\claude_desktop_config.json`).
-3. Update the `command` and `args` paths in that file to point at your repo's `.venv/bin/python` and `src/cutover_mcp/server.py`.
+3. Fill in the `env` block with your credentials — see [Environment Configuration](#environment-configuration). Claude Desktop does not inherit your shell's `PATH`, so if it reports that `uvx` cannot be found, set `command` to the full path from `which uvx` (typically `/opt/homebrew/bin/uvx` on macOS).
 4. Restart Claude Desktop. Click the **+** button at the bottom of the chat box, then **Connectors** — `cutover-mcp` should be listed there along with its tools. If it isn't, check Settings → Developer for its connection status and logs.
 
 This will allow Claude Desktop to connect to your MCP server.
 
 ## Docker Usage
 
-Docker is optional — the server runs fine without it (see [Setup](#setup)). Use this if you want a self-contained way to run it instead of managing a venv.
+Docker is optional — the server runs fine without it (see [Installation](#installation)). Use this if you want a self-contained way to run it instead of `uvx`.
 
 From the repository root, build the image:
 
@@ -686,7 +700,7 @@ docker run -i --rm --env-file .env cutover-mcp
 
 ## Example: Using Docker in MCP Server Configuration
 
-You can configure your MCP server to use the Docker container instead of the venv. The root key differs by client: VS Code (`mcp.json`) uses `servers`; Claude Desktop (`claude_desktop_config.json`) uses `mcpServers`.
+You can configure your MCP server to use the Docker container instead of `uvx`. The root key differs by client: VS Code (`mcp.json`) uses `servers`; Claude Desktop (`claude_desktop_config.json`) uses `mcpServers`.
 
 VS Code (`.vscode/mcp.json`):
 

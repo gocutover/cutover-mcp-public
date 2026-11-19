@@ -34,7 +34,10 @@ load_dotenv()
 logging.basicConfig(level=logging.INFO, stream=sys.stderr)
 logger = logging.getLogger(__name__)
 
-if __name__ == "__main__":
+
+def main() -> None:
+    """Run the server. This is the `cutover-mcp` console script (see [project.scripts] in pyproject.toml),
+    so `uvx cutover-mcp`, `uv run cutover-mcp` and `python src/cutover_mcp/server.py` all land here."""
     transport = os.getenv("MCP_TRANSPORT", "stdio")
 
     if transport == "stdio":
@@ -45,3 +48,7 @@ if __name__ == "__main__":
             host=os.getenv("MCP_HOST", "0.0.0.0"),
             port=int(os.getenv("MCP_PORT", "8000")),
         )
+
+
+if __name__ == "__main__":
+    main()

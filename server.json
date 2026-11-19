@@ -1,0 +1,45 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.gocutover/cutover-mcp",
+  "title": "Cutover",
+  "description": "Query and manage Cutover runbooks, tasks, streams, workspaces and teams through the Cutover API.",
+  "repository": {
+    "url": "https://github.com/gocutover/cutover-mcp-public",
+    "source": "github"
+  },
+  "websiteUrl": "https://www.cutover.com",
+  "version": "0.0.0",
+  "packages": [
+    {
+      "registryType": "pypi",
+      "registryBaseUrl": "https://pypi.org",
+      "identifier": "cutover-mcp",
+      "version": "0.0.0",
+      "runtimeHint": "uvx",
+      "transport": {
+        "type": "stdio"
+      },
+      "environmentVariables": [
+        {
+          "name": "CUTOVER_CORE_URL",
+          "description": "Your Cutover instance URL, e.g. https://YOUR-INSTANCE-NAME.cutover.com",
+          "isRequired": true,
+          "format": "string"
+        },
+        {
+          "name": "CUTOVER_API_TOKEN",
+          "description": "A Cutover user app token (My Details > User App Tokens, or issued by an admin via Access Management)",
+          "isRequired": true,
+          "isSecret": true,
+          "format": "string"
+        },
+        {
+          "name": "CUTOVER_BASE_URL",
+          "description": "The Cutover API host. Defaults to https://api.cutover.net; set it only for an instance with its own API host, e.g. https://api.YOUR-INSTANCE-NAME.cutover.com",
+          "isRequired": false,
+          "format": "string"
+        }
+      ]
+    }
+  ]
+}

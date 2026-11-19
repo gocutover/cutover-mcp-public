@@ -2,10 +2,21 @@
 	"servers": {
 		"cutover-mcp": {
 			"type": "stdio",
-			"command": "/Users/YOUR-USER-NAME/code/cutover-mcp/.venv/bin/python",
-			"args": ["/Users/YOUR-USER-NAME/code/cutover-mcp/src/cutover_mcp/server.py"],
-			"cwd": ""
+			"command": "uvx",
+			"args": ["cutover-mcp"],
+			"env": {
+				"CUTOVER_BASE_URL": "https://api.cutover.net",
+				"CUTOVER_API_TOKEN": "${input:cutover-api-token}",
+				"CUTOVER_CORE_URL": "https://YOUR-INSTANCE-NAME.cutover.com"
+			}
 		}
 	},
-	"inputs": []
+	"inputs": [
+		{
+			"id": "cutover-api-token",
+			"type": "promptString",
+			"description": "Cutover API token (My Details > User App Tokens)",
+			"password": true
+		}
+	]
 }

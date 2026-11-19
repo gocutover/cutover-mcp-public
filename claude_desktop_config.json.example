@@ -1,9 +1,13 @@
 {
   "mcpServers": {
     "cutover-mcp": {
-      "command": "/Users/YOUR-USER-NAME/code/cutover-mcp/.venv/bin/python",
-      "args": ["/Users/YOUR-USER-NAME/code/cutover-mcp/src/cutover_mcp/server.py"],
-      "cwd": ""
+      "command": "uvx",
+      "args": ["cutover-mcp"],
+      "env": {
+        "CUTOVER_BASE_URL": "https://api.cutover.net",
+        "CUTOVER_API_TOKEN": "your_token_here",
+        "CUTOVER_CORE_URL": "https://YOUR-INSTANCE-NAME.cutover.com"
+      }
     }
   }
 }

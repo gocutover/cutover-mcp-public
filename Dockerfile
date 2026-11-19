@@ -27,5 +27,5 @@ ENV CUTOVER_MCP_GIT_SHA=${GIT_SHA}
 # Expose the port the server runs on
 EXPOSE 8000
 
-# Command to run the server
-CMD ["/app/.venv/bin/python", "src/cutover_mcp/server.py"]
+# Command to run the server: the same console script `uvx cutover-mcp` runs (see pyproject.toml).
+CMD ["/app/.venv/bin/cutover-mcp"]
