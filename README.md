@@ -24,7 +24,7 @@ An MCP server for interacting with the Cutover API, powered by FastMCP.
 
 ## Capabilities
 
-The server exposes 45 tools over MCP, grouped into 14 categories.
+The server exposes 50 tools over MCP, grouped into 14 categories.
 
 ### Tool Groups
 
@@ -39,7 +39,7 @@ The server exposes 45 tools over MCP, grouped into 14 categories.
 | `teams` | Look up teams associated with a runbook |
 | `users` | Look up and search for users |
 | `custom_fields` | Discover custom fields and their metadata/valid options, and create, update and archive field definitions and groups |
-| `data_sources` | Get a signed URL to upload the file a data source reads from |
+| `data_sources` | Upload the file a data source reads from, and create, read, update and archive JSON data sources |
 | `folders` | List folders within a workspace |
 | `comments` | Post and read comments on a runbook or task |
 | `activities` | Read a runbook's activity trail |
@@ -504,12 +504,72 @@ Takes no parameters. Archived groups are not returned; the API does not list the
 
 <details>
 
+<summary>list_data_sources - List JSON data sources</summary>
+
+- `archived`: Return archived data sources instead of active ones (boolean, optional, default false)
+- `query`: Only return data sources whose name contains this text, case insensitive (string, optional)
+
+Data sources created by an integration are not returned. Requires the Custom Fields Admin or Global Stakeholder role.
+
+</details>
+
+<details>
+
+<summary>get_data_source - Get a data source</summary>
+
+- `data_source_id`: The data source's ID (integer, required)
+
+Returns its settings, `mappings`, whether it is `archivable` (false while an active custom field uses it, or once archived), and the last import's `last_sync_status` (`queued`, `running`, `succeeded` or `failed`), `last_sync_error` and times.
+
+</details>
+
+<details>
+
+<summary>create_data_source - Create a JSON data source</summary>
+
+- `name`: The data source's name (string, required)
+- `url`: The endpoint searched for records, or the `datasource_endpoint_url` returned by `get_data_source_upload_url` for an uploaded file (string, required)
+- `mappings`: The fields of each record, as `{mapping, type, primary}`; `type` defaults to `text` and exactly one mapping is `primary` (list, required)
+- `persist_mode`: `persist_all` to import every record, or `query_cache` to store only the records a search returns (string, optional)
+- `http_method`: `get` or `post` (string, optional)
+- `records_path`: Path to the array of records in the search response (string, optional)
+- `search_parameter_name`: Query string parameter the search term is sent in (string, optional)
+- `attributes_path`: Path, relative to each record, to the object holding the mapped keys (string, optional)
+
+A searchable custom field's `value_key` must equal one of the `mapping` names. For an uploaded file, Cutover sets `records_path` and `search_parameter_name` itself. Authentication settings cannot be set through the API. Requires the Custom Fields Admin role; `persist_all` also requires Global Admin.
+
+</details>
+
+<details>
+
+<summary>update_data_source - Rename a data source or change its persist mode</summary>
+
+- `data_source_id`: The data source's ID (integer, required)
+- `name`: The new name (string, optional)
+- `persist_mode`: `persist_all` or `query_cache` (string, optional)
+
+No other setting can be changed after creation. Requires the Custom Fields Admin role; changing `persist_mode` also requires Global Admin.
+
+</details>
+
+<details>
+
+<summary>archive_data_source - Archive a data source</summary>
+
+- `data_source_id`: The data source's ID (integer, required)
+
+Fails while an active custom field uses the data source; archive those fields first. Requires the Custom Fields Admin role.
+
+</details>
+
+<details>
+
 <summary>get_data_source_upload_url - Get a signed URL to upload a file for a data source</summary>
 
 - `file_name`: Name of the file to upload, e.g. `cmdb.csv` (string, required)
-- `data_source_id`: An existing data source to upload a new version of the file for; omit for the first upload (integer, optional)
+- `data_source_id`: A data source created over an uploaded file, to upload a new version of its file; omit for the first upload (integer, optional)
 
-The server cannot read files on your machine, so the agent uploads the file itself with an HTTP `PUT` to the returned `url` before it expires (`expires_in` seconds), then creates the data source with the returned `datasource_endpoint_url` as its URL. A new version for an existing data source is only read if the returned `datasource_endpoint_url` is that data source's current URL; refresh and sync the data source afterwards. Fails with a clear error if the instance's data source search service is not configured.
+The server cannot read files on your machine, so the agent uploads the file itself with an HTTP `PUT` to the returned `url` before it expires (`expires_in` seconds), then calls `create_data_source` with the returned `datasource_endpoint_url` as its URL. With `data_source_id`, fails before any upload unless that data source already reads from the returned `datasource_endpoint_url`, since a data source's URL cannot be changed; after uploading a new version, refresh and sync the data source. Fails with a clear error if the instance's data source search service is not configured.
 
 </details>
 
