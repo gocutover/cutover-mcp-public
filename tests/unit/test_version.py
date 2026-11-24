@@ -2,7 +2,7 @@ import httpx
 import pytest
 
 from cutover_mcp import __version__
-from cutover_mcp.app import mcp
+from cutover_mcp.app import app_lifespan, mcp
 from cutover_mcp.clients.api import APIClient
 
 
@@ -44,3 +44,12 @@ async def test_user_agent_carries_the_package_version():
         assert client.headers["User-Agent"] == f"CutoverMCP/{__version__}"
     finally:
         await api.aclose()
+
+
+@pytest.mark.asyncio
+async def test_a_malformed_trusted_api_hosts_stops_startup_on_every_entry_point(monkeypatch):
+    monkeypatch.setenv("TRUSTED_API_HOSTS", "api.cutover.net,*.com")
+
+    with pytest.raises(ValueError, match="TRUSTED_API_HOSTS"):
+        async with app_lifespan(mcp):
+            pass

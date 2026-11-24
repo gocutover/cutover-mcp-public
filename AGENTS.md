@@ -29,6 +29,12 @@ Three variables, all read from `.env` at runtime (see `src/cutover_mcp/clients/a
 - `CUTOVER_API_TOKEN` (required) — an API token for that instance. On hosted instances, generate via Access Management (an admin generates a token for a specific user) or My Details → User App Tokens (self-service).
 - `CUTOVER_BASE_URL` (optional) — the Cutover API host. Derived from `CUTOVER_CORE_URL` when unset (`https://api.cutover.net` for production instances; other environments get `https://api.<environment domain>`). Only Cutover-hosted instance URLs are derived; anything else (e.g. a local `core` on `localhost`) raises a `ValueError` asking for `CUTOVER_BASE_URL`. Set it for a single-tenant instance with its own API host, or for local public-api (`http://localhost:9292`).
 
+Over HTTP (`MCP_TRANSPORT` other than `stdio`, or any call made while serving an HTTP request) there are rules that new code must keep:
+
+- Every request goes through `APIClient.request`. It pins the host to the client's API host and re-checks it against the `TRUSTED_API_HOSTS` allowlist in `src/cutover_mcp/security/host_policy.py`; a request sent any other way skips both.
+- Never log the token, request headers or response bodies.
+- Tests run as stdio unless they set `MCP_TRANSPORT` (`tests/conftest.py`).
+
 If you don't have real credentials available, ask the user for values rather than inventing them — the first tool call raises a clear `ValueError` if `CUTOVER_API_TOKEN` is missing, or if neither `CUTOVER_CORE_URL` nor `CUTOVER_BASE_URL` is set.
 
 ## Running the server

@@ -7,6 +7,7 @@ from dotenv import load_dotenv
 
 # Import the central mcp object from our new app.py file
 from cutover_mcp.app import mcp
+from cutover_mcp.security import host_policy
 
 # Import modules to register their components. This is the magic step.
 # Because these modules also import `mcp` from `app.py`, their decorators
@@ -43,6 +44,8 @@ def main() -> None:
     if transport == "stdio":
         mcp.run()
     else:
+        trusted = host_policy.trusted_api_hosts()
+        logger.info("Trusted API hosts: %s", ", ".join(sorted(".".join(p.labels) for p in trusted)))
         mcp.run(
             transport=transport,
             host=os.getenv("MCP_HOST", "0.0.0.0"),

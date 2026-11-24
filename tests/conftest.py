@@ -4,6 +4,13 @@ from unittest.mock import AsyncMock, patch
 import pytest
 
 
+@pytest.fixture(autouse=True)
+def _stdio_transport(monkeypatch):
+    """Tests run as stdio unless they opt into HTTP mode, whatever the developer's shell sets."""
+    monkeypatch.delenv("MCP_TRANSPORT", raising=False)
+    monkeypatch.delenv("TRUSTED_API_HOSTS", raising=False)
+
+
 @pytest.fixture
 def mock_env():
     """Set up test environment variables."""

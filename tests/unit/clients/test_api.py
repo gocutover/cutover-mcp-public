@@ -13,7 +13,9 @@ from cutover_mcp.clients.api import (
     CutoverCredentials,
     _credentials_from_elicitation,
     default_base_url,
+    normalise_core_url,
 )
+from cutover_mcp.security.host_policy import UntrustedHostError
 
 
 def _mock_context(get_state_side_effect=None, elicit_return_value=None, elicit_side_effect=None):
@@ -643,3 +645,357 @@ async def test_500_on_a_derived_host_has_no_hint(monkeypatch):
     assert str(exc_info.value) == "boom"
     assert exc_info.value.hint is None
     await client.aclose()
+
+
+def _over_http(monkeypatch, *, base_url=None, core_url=None, trusted=None):
+    monkeypatch.setenv("MCP_TRANSPORT", "streamable-http")
+    monkeypatch.delenv("CUTOVER_API_TOKEN", raising=False)
+    for name, value in (("CUTOVER_BASE_URL", base_url), ("CUTOVER_CORE_URL", core_url), ("TRUSTED_API_HOSTS", trusted)):
+        if value is None:
+            monkeypatch.delenv(name, raising=False)
+        else:
+            monkeypatch.setenv(name, value)
+
+
+def _headers(api_key="token", core_url=None, base_url=None):
+    return patch("cutover_mcp.clients.api._credentials_from_http_headers", return_value=(api_key, core_url, base_url))
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "base_url",
+    [
+        "http://169.254.169.254",
+        "http://10.0.0.1",
+        "https://api.cutover.net.evil.com",
+        "https://evil.com#.cutover.net",
+        "https://x@api.cutover.net",
+        "http://api.cutover.net",
+    ],
+)
+async def test_over_http_get_client_refuses_an_untrusted_base_url_header(monkeypatch, base_url):
+    _over_http(monkeypatch)
+
+    with _headers(core_url="https://acme.cutover.com", base_url=base_url), pytest.raises(UntrustedHostError):
+        await APIClientManager().get_client()
+
+
+@pytest.mark.asyncio
+async def test_over_http_get_client_refuses_an_untrusted_core_url_header(monkeypatch):
+    _over_http(monkeypatch)
+
+    with (
+        _headers(core_url="https://x.internal.example.cutover.cloud", base_url="https://api.cutover.net"),
+        pytest.raises(UntrustedHostError, match="Core-Url"),
+    ):
+        await APIClientManager().get_client()
+
+
+@pytest.mark.asyncio
+async def test_over_http_get_client_refuses_an_untrusted_base_url_from_the_credentials_form(monkeypatch):
+    _over_http(monkeypatch)
+    elicited = AsyncMock(return_value=("token", "https://acme.cutover.com", "http://169.254.169.254"))
+
+    with (
+        _headers(api_key=None),
+        patch("cutover_mcp.clients.api._credentials_from_elicitation", elicited),
+        pytest.raises(UntrustedHostError, match="Base-Url"),
+    ):
+        await APIClientManager().get_client()
+
+
+@pytest.mark.asyncio
+async def test_over_http_get_client_refuses_an_untrusted_derived_api_host(monkeypatch):
+    _over_http(monkeypatch, trusted="api.cutover.net,api.*.cutover.com")
+
+    with (
+        _headers(core_url="https://your-instance.dev.cutover.cloud"),
+        pytest.raises(UntrustedHostError, match="derived from Core-Url"),
+    ):
+        await APIClientManager().get_client()
+
+
+@pytest.mark.asyncio
+async def test_over_http_get_client_accepts_a_production_instance(monkeypatch):
+    _over_http(monkeypatch)
+    mgr = APIClientManager()
+
+    with _headers(core_url="https://acme.cutover.com"):
+        client = await mgr.get_client()
+
+    assert client.base_url == "https://api.cutover.net"
+    await mgr.close_all()
+
+
+@pytest.mark.asyncio
+async def test_over_http_get_client_accepts_a_dev_instance(monkeypatch):
+    _over_http(monkeypatch)
+    mgr = APIClientManager()
+
+    with _headers(core_url="https://your-instance.dev.cutover.cloud"):
+        client = await mgr.get_client()
+
+    assert client.base_url == "https://api.dev.cutover.cloud"
+    await mgr.close_all()
+
+
+@pytest.mark.asyncio
+async def test_stdio_get_client_still_allows_a_local_public_api(monkeypatch):
+    monkeypatch.setenv("CUTOVER_BASE_URL", "http://localhost:9292")
+    monkeypatch.setenv("CUTOVER_CORE_URL", "http://localhost:8000")
+    monkeypatch.setenv("CUTOVER_API_TOKEN", "development-token")
+    mgr = APIClientManager()
+
+    client = await mgr.get_client()
+
+    assert client.base_url == "http://localhost:9292"
+    await mgr.close_all()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("transport", ["stdio", "streamable-http"])
+async def test_a_page_link_to_another_host_is_requested_from_the_api_host(monkeypatch, transport):
+    monkeypatch.setenv("MCP_TRANSPORT", transport)
+    client = APIClient("https://api.cutover.net", "token")
+
+    with respx.mock(assert_all_called=False) as mock:
+        api = mock.get("https://api.cutover.net/core/runbooks", params={"page": "2"}).mock(
+            return_value=httpx.Response(200, json={"data": []})
+        )
+        evil = mock.get(host="169.254.169.254").mock(return_value=httpx.Response(200, json={}))
+
+        await client.request("GET", "http://169.254.169.254/core/runbooks?page=2")
+
+    assert api.called
+    assert not evil.called
+    assert api.calls.last.request.headers["Authorization"] == "Bearer token"
+    await client.aclose()
+
+
+@pytest.mark.asyncio
+async def test_a_redirect_is_not_followed(monkeypatch):
+    client = APIClient("https://api.cutover.net", "token")
+
+    with respx.mock(assert_all_called=False) as mock:
+        mock.get("https://api.cutover.net/widgets/1").mock(
+            return_value=httpx.Response(302, headers={"Location": "http://169.254.169.254/latest/meta-data/"})
+        )
+        metadata = mock.get(host="169.254.169.254").mock(return_value=httpx.Response(200, text="secret"))
+
+        with pytest.raises(CutoverAPIError) as exc_info:
+            await client.request("GET", "widgets/1")
+
+    assert exc_info.value.status_code == 302
+    assert not metadata.called
+    await client.aclose()
+
+
+@pytest.mark.asyncio
+async def test_over_http_request_refuses_an_untrusted_client_before_sending(monkeypatch):
+    monkeypatch.setenv("MCP_TRANSPORT", "streamable-http")
+    client = APIClient("https://10.0.0.1", "token")
+
+    with respx.mock(assert_all_called=False) as mock:
+        route = mock.route().mock(return_value=httpx.Response(200, json={}))
+
+        with pytest.raises(UntrustedHostError):
+            await client.request("GET", "widgets/1")
+
+    assert not route.called
+    await client.aclose()
+
+
+@pytest.mark.asyncio
+async def test_token_and_response_bodies_are_not_logged(monkeypatch, caplog):
+    client = APIClient("https://api.cutover.net", "tok-SECRET-123")
+
+    async def no_sleep(_delay):
+        return None
+
+    monkeypatch.setattr("cutover_mcp.clients.api.asyncio.sleep", no_sleep)
+
+    with caplog.at_level(logging.DEBUG), respx.mock(base_url="https://api.cutover.net") as mock:
+        mock.get("/a").mock(return_value=httpx.Response(422, text="internal-body-422"))
+        mock.get("/b").mock(return_value=httpx.Response(503, text="internal-body-503"))
+        mock.get("/c").mock(side_effect=httpx.ConnectError("refused"))
+        for path in ("a", "b", "c"):
+            with pytest.raises((CutoverAPIError, CutoverConnectionError)):
+                await client.request("GET", path)
+
+    assert "tok-SECRET-123" not in caplog.text
+    assert "internal-body" not in caplog.text
+    await client.aclose()
+
+
+@pytest.mark.asyncio
+async def test_get_client_checks_hosts_while_serving_http_whatever_mcp_transport_says(monkeypatch):
+    monkeypatch.delenv("MCP_TRANSPORT", raising=False)
+
+    with (
+        patch("fastmcp.server.dependencies.get_http_request", return_value=MagicMock()),
+        _headers(core_url="https://acme.cutover.com", base_url="http://169.254.169.254"),
+        pytest.raises(UntrustedHostError),
+    ):
+        await APIClientManager().get_client()
+
+
+@pytest.mark.asyncio
+async def test_rejected_answers_from_the_credentials_form_are_forgotten(monkeypatch):
+    _over_http(monkeypatch)
+    ctx = _mock_context(
+        get_state_side_effect=[None, None, None],
+        elicit_return_value=MagicMock(
+            action="accept",
+            data=CutoverCredentials(
+                core_url="https://acme.cutover.com", api_token="token", base_url="http://169.254.169.254"
+            ),
+        ),
+    )
+    ctx.delete_state = AsyncMock()
+
+    with (
+        _headers(api_key=None),
+        patch("fastmcp.server.dependencies.get_context", return_value=ctx),
+        pytest.raises(UntrustedHostError),
+    ):
+        await APIClientManager().get_client()
+
+    forgotten = {call.args[0] for call in ctx.delete_state.await_args_list}
+    assert forgotten == {"cutover_api_key", "cutover_core_url", "cutover_base_url"}
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("core_url", ["https://", "https:///app", "#/app/acme"])
+async def test_over_http_a_core_url_with_no_host_is_refused_not_dropped(monkeypatch, caplog, core_url):
+    _over_http(monkeypatch)
+
+    with (
+        caplog.at_level(logging.WARNING),
+        _headers(core_url=core_url, base_url="https://api.cutover.net"),
+        pytest.raises(UntrustedHostError),
+    ):
+        await APIClientManager().get_client()
+
+    assert "UNTRUSTED_HOST_REJECTED field=Core-Url" in caplog.text
+
+
+@pytest.mark.asyncio
+async def test_a_core_url_with_no_host_from_the_credentials_form_is_forgotten(monkeypatch):
+    _over_http(monkeypatch)
+    ctx = _mock_context(
+        get_state_side_effect=[None, None, None],
+        elicit_return_value=MagicMock(
+            action="accept",
+            data=CutoverCredentials(core_url="https://", api_token="token", base_url="https://api.cutover.net"),
+        ),
+    )
+    ctx.delete_state = AsyncMock()
+
+    with (
+        _headers(api_key=None),
+        patch("fastmcp.server.dependencies.get_context", return_value=ctx),
+        pytest.raises(UntrustedHostError),
+    ):
+        await APIClientManager().get_client()
+
+    forgotten = {call.args[0] for call in ctx.delete_state.await_args_list}
+    assert forgotten == {"cutover_api_key", "cutover_core_url", "cutover_base_url"}
+
+
+@pytest.mark.asyncio
+async def test_over_stdio_a_core_url_with_no_host_is_still_ignored(monkeypatch):
+    monkeypatch.setenv("CUTOVER_API_TOKEN", "token")
+    monkeypatch.setenv("CUTOVER_CORE_URL", "https://")
+    monkeypatch.setenv("CUTOVER_BASE_URL", "http://localhost:9292")
+
+    client = await APIClientManager().get_client()
+
+    assert client.core_url is None
+
+
+@pytest.mark.asyncio
+async def test_rejections_are_logged_under_one_key(monkeypatch, caplog):
+    _over_http(monkeypatch)
+
+    with (
+        caplog.at_level(logging.WARNING),
+        _headers(core_url="https://acme.cutover.com", base_url="http://169.254.169.254"),
+        pytest.raises(UntrustedHostError),
+    ):
+        await APIClientManager().get_client()
+
+    assert "UNTRUSTED_HOST_REJECTED field=Base-Url" in caplog.text
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "core_url",
+    [
+        "https://acme.cutover.com/#/app/acme/runbooks",
+        "acme.cutover.com/#/app/acme",
+        "https://acme.cutover.com/?tab=runbooks",
+        "https://acme.cutover.com/",
+    ],
+)
+async def test_over_http_get_client_accepts_an_instance_url_copied_from_the_browser(monkeypatch, core_url):
+    _over_http(monkeypatch)
+    mgr = APIClientManager()
+
+    with _headers(core_url=core_url):
+        client = await mgr.get_client()
+
+    assert client.core_url == "https://acme.cutover.com"
+    await mgr.close_all()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "core_url",
+    ["https://evil.com#.acme.cutover.com", "https://evil.com\\@acme.cutover.com", "https://x@acme.cutover.com"],
+)
+async def test_over_http_get_client_still_refuses_a_disguised_instance_url(monkeypatch, core_url):
+    _over_http(monkeypatch)
+
+    with _headers(core_url=core_url, base_url="https://api.cutover.net"), pytest.raises(UntrustedHostError):
+        await APIClientManager().get_client()
+
+
+@pytest.mark.asyncio
+async def test_over_http_request_checks_the_host_not_the_path(monkeypatch):
+    monkeypatch.setenv("MCP_TRANSPORT", "streamable-http")
+    client = APIClient("https://api.cutover.net", "token")
+
+    with respx.mock(base_url="https://api.cutover.net") as mock:
+        route = mock.get(url__regex=r".*/core/runbooks/.*").mock(return_value=httpx.Response(200, json={}))
+        await client.request("GET", "core/runbooks/12 34#é")
+
+    assert route.called
+    await client.aclose()
+
+
+@pytest.mark.parametrize(
+    ("raw", "expected"),
+    [
+        ("acme.cutover.com/#/app/x?next=https://acme.cutover.com", "https://acme.cutover.com"),
+        ("HTTPS://acme.cutover.com/#/app", "https://acme.cutover.com"),
+        ("http://localhost:3000/", "http://localhost:3000"),
+        ("https://", None),
+        ("   ", None),
+    ],
+)
+def test_normalise_core_url_keeps_only_the_origin(raw, expected):
+    assert normalise_core_url(raw) == expected
+
+
+@pytest.mark.asyncio
+async def test_over_http_an_untrusted_core_url_without_a_base_url_is_refused_and_logged(monkeypatch, caplog):
+    _over_http(monkeypatch)
+
+    with (
+        caplog.at_level(logging.WARNING),
+        _headers(core_url="https://evil.example"),
+        pytest.raises(UntrustedHostError, match="Core-Url"),
+    ):
+        await APIClientManager().get_client()
+
+    assert "UNTRUSTED_HOST_REJECTED field=Core-Url" in caplog.text

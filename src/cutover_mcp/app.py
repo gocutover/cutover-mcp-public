@@ -11,6 +11,7 @@ from starlette.responses import JSONResponse
 
 from cutover_mcp import __version__
 from cutover_mcp.clients.api import client_mgr
+from cutover_mcp.security import host_policy
 
 # This is the central server instance that all other modules will import
 # to register their tools and resources.
@@ -23,6 +24,9 @@ logger = logging.getLogger(__name__)
 async def app_lifespan(server: FastMCP) -> AsyncIterator[None]:
     """Manages the application lifecycle (startup and shutdown)."""
     logger.info("Server starting up (cutover-mcp %s)...", __version__)
+    # Every entry point runs this lifespan (server.py, `fastmcp run`, mcp.http_app()), so a
+    # malformed TRUSTED_API_HOSTS stops each of them before any traffic is served.
+    host_policy.trusted_api_hosts()
     yield
     logger.info("Server shutting down...")
     await client_mgr.close_all()
