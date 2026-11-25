@@ -1,5 +1,7 @@
 from typing import Any, Literal
 
+from pydantic import BaseModel, ConfigDict, Field
+
 from cutover_mcp.app import mcp
 from cutover_mcp.clients.api import client_mgr
 
@@ -20,12 +22,13 @@ RUNBOOK_APPLY_TO = [
 # fields do not apply to runbooks or tasks. scope="all" filters on this list rather than on an
 # allowlist, so any new scopes the Cutover API introduces are returned without a code change.
 EXCLUDED_APPLY_TO = ["runbook_end", "project_add_edit", "project_edit"]
+SEARCHABLE_FIELD_TYPES = {"searchable", "multi_searchable"}
 
 
 def _build_field(item: dict[str, Any]) -> dict[str, Any]:
     """Flatten a JSON:API custom field resource into a plain dict."""
     attributes = item.get("attributes", {})
-    return {
+    field = {
         "id": item.get("id"),
         "name": attributes.get("name"),
         "field_type": attributes.get("field_type"),
@@ -36,6 +39,15 @@ def _build_field(item: dict[str, Any]) -> dict[str, Any]:
         "default_value": attributes.get("default_value"),
         "display_name": attributes.get("display_name"),
     }
+    if field["field_type"] in SEARCHABLE_FIELD_TYPES:
+        data_source = ((item.get("relationships") or {}).get("data_source") or {}).get("data") or {}
+        field["data_source_id"] = data_source.get("id")
+        field["value_key"] = attributes.get("value_key")
+        field["display_data_view"] = attributes.get("display_data_view", False)
+    elif attributes.get("value_key"):
+        # A dependent field of a searchable field, filled from this key of the picked record.
+        field["value_key"] = attributes["value_key"]
+    return field
 
 
 @mcp.tool()
@@ -60,9 +72,11 @@ async def list_custom_fields(
         Incident Review (e.g. Incident Summary, RCA, Lessons Learned), all of which are set with
         update_runbook.
     :return: List of custom fields with id, name, field_type, field_options, required,
-        apply_to, allow_field_creation, default_value, display_name. Dependent (child)
-        fields of searchable/structured parents are nested under their parent's
-        dependent_fields key rather than listed as separate top-level entries.
+        apply_to, allow_field_creation, default_value, display_name; searchable and
+        multi_searchable fields also have data_source_id, value_key and display_data_view.
+        Dependent (child) fields of searchable/structured parents are nested under their parent's
+        dependent_fields key rather than listed as separate top-level entries; a searchable
+        field's dependent fields each have the value_key they are filled from.
         apply_to identifies where a field is used: task_edit, task_start, task_end and
         task_add_edit for tasks; runbook_add_edit and runbook_edit for runbooks; runbook_page
         (homepage), pir_summary and pir_value_select (PIR), and incident_review_content
@@ -144,8 +158,9 @@ async def get_custom_field(
     :param custom_field_id: The ID of the custom field to retrieve.
     :return: Custom field metadata with id, name, field_type, field_options, required, apply_to,
         allow_field_creation, default_value, display_name, global, archived,
-        custom_field_group_id, task_type_ids and runbook_type_ids. workspace_id is always None
-        here because the API leaves the workspace out of this response.
+        custom_field_group_id, task_type_ids and runbook_type_ids; searchable and
+        multi_searchable fields also have data_source_id, value_key and display_data_view.
+        workspace_id is always None here because the API leaves the workspace out of this response.
     """
     client = await client_mgr.get_client()
 
@@ -153,9 +168,18 @@ async def get_custom_field(
     return _build_field_detail(response.get("data", {}))
 
 
-# Field types that can be created through these tools. searchable, multi_searchable and endpoint
-# fields need an integration data source configured in the Cutover UI, so they are left out.
-CreatableFieldType = Literal["text", "textarea", "select_menu", "radiobox", "checkboxes", "datetime", "user_select"]
+# endpoint fields need an integration data source configured in the Cutover UI, so they are left out.
+CreatableFieldType = Literal[
+    "text",
+    "textarea",
+    "select_menu",
+    "radiobox",
+    "checkboxes",
+    "datetime",
+    "user_select",
+    "searchable",
+    "multi_searchable",
+]
 OPTION_FIELD_TYPES = {"select_menu", "radiobox", "checkboxes"}
 CreatableApplyTo = Literal[
     "runbook_add_edit",
@@ -196,6 +220,50 @@ async def _read_back(client: Any, written: dict[str, Any]) -> dict[str, Any]:
     return field
 
 
+class DependentField(BaseModel):
+    """A text field filled from one key of the record picked in a searchable field."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    name: str = Field(
+        description=(
+            "The field's name. Cutover puts the searchable field's name in front of it, so pass the "
+            "short name, e.g. Owner."
+        )
+    )
+    value_key: str = Field(
+        description="The key of the record that fills the field: one of the data source's mappings, e.g. owner."
+    )
+    display_search: bool | None = Field(default=None, description="Allow filtering by this field.")
+
+
+def _dependent_attributes(dependent_fields: list[DependentField]) -> list[dict[str, Any]]:
+    value_keys = [field.value_key for field in dependent_fields]
+    duplicates = sorted({key for key in value_keys if value_keys.count(key) > 1})
+    if duplicates:
+        raise ValueError(f"Each value_key can fill only one dependent field: {', '.join(duplicates)}.")
+    return [field.model_dump(exclude_none=True) for field in dependent_fields]
+
+
+def _data_source(data_source_id: int) -> dict[str, Any]:
+    return {"data": {"id": str(data_source_id), "type": "data_source"}}
+
+
+def _reject_data_source_link(
+    field_type: str,
+    data_source_id: int | None,
+    value_key: str | None,
+    display_data_view: bool | None,
+    dependent_fields: list[DependentField] | None,
+) -> None:
+    given = (data_source_id, value_key, display_data_view, dependent_fields)
+    if any(value is not None for value in given):
+        raise ValueError(
+            "data_source_id, value_key, display_data_view and dependent_fields are only allowed for "
+            f"searchable and multi_searchable fields, not {field_type}."
+        )
+
+
 def _constraints(
     task_type_ids: list[str] | None,
     runbook_type_ids: list[str] | None,
@@ -213,6 +281,10 @@ async def create_custom_field(
     workspace_id: str | None = None,
     global_field: bool = False,
     field_options: list[str] | None = None,
+    data_source_id: int | None = None,
+    value_key: str | None = None,
+    display_data_view: bool | None = None,
+    dependent_fields: list[DependentField] | None = None,
     required: bool | None = None,
     default_value: str | None = None,
     allow_field_creation: bool | None = None,
@@ -231,7 +303,9 @@ async def create_custom_field(
     an existing field is reused rather than duplicated.
 
     :param name: The field's name.
-    :param field_type: text, textarea, select_menu, radiobox, checkboxes, datetime or user_select.
+    :param field_type: text, textarea, select_menu, radiobox, checkboxes, datetime, user_select,
+        searchable or multi_searchable. A searchable field picks one record of a data source and a
+        multi_searchable field picks several.
     :param apply_to: Where the field appears: runbook_add_edit / runbook_edit (runbook details),
         runbook_page (runbook homepage), task_add_edit / task_edit (task details), task_start or
         task_end (asked when a task starts or finishes).
@@ -240,6 +314,16 @@ async def create_custom_field(
         explicitly, and only when the user asks for a global field, since every workspace sees it.
     :param field_options: Option names. Required for select_menu, radiobox and checkboxes, and
         not allowed for other field types.
+    :param data_source_id: The data source whose records the field searches (see
+        list_data_sources). Required for searchable and multi_searchable fields, and not allowed
+        for other field types.
+    :param value_key: The key of each record the field shows: the mapping of one of the data
+        source's mappings, for example app_id (see get_data_source). Required for searchable and
+        multi_searchable fields, and not allowed for other field types.
+    :param display_data_view: Show the data source's records in the workspace. Only for
+        searchable and multi_searchable fields.
+    :param dependent_fields: Text fields filled from the other keys of the picked record, one per
+        key, so those columns are shown too. Only for searchable and multi_searchable fields.
     :param required: Whether a value must be given.
     :param default_value: The value a new runbook or task starts with.
     :param allow_field_creation: Let users add options from within a runbook.
@@ -251,8 +335,10 @@ async def create_custom_field(
     :param runbook_type_ids: Limit the field to these runbook types (see list_runbook_types).
     :return: The created field: id, name, field_type, field_options, required, apply_to,
         allow_field_creation, default_value, display_name, global, archived, workspace_id,
-        custom_field_group_id, task_type_ids, runbook_type_ids. display_name always equals
-        name for fields created this way; the API does not accept a separate label.
+        custom_field_group_id, task_type_ids, runbook_type_ids, and for searchable and
+        multi_searchable fields data_source_id, value_key and display_data_view. display_name
+        always equals name for fields created this way; the API does not accept a separate label.
+        Dependent fields are not included; list_custom_fields nests them under the field.
     """
     if bool(workspace_id) == global_field:
         raise ValueError("Pass exactly one of workspace_id or global_field=True.")
@@ -260,6 +346,10 @@ async def create_custom_field(
         raise ValueError(f"field_options is required for a {field_type} field.")
     if field_type not in OPTION_FIELD_TYPES and field_options:
         raise ValueError(f"field_options is only allowed for select_menu, radiobox and checkboxes, not {field_type}.")
+    if field_type in SEARCHABLE_FIELD_TYPES and (data_source_id is None or not value_key):
+        raise ValueError(f"data_source_id and value_key are required for a {field_type} field.")
+    if field_type not in SEARCHABLE_FIELD_TYPES:
+        _reject_data_source_link(field_type, data_source_id, value_key, display_data_view, dependent_fields)
 
     attributes: dict[str, Any] = {
         "name": name,
@@ -269,7 +359,11 @@ async def create_custom_field(
     }
     if field_options:
         attributes["field_options"] = [{"name": option} for option in field_options]
+    if dependent_fields:
+        attributes["dependent_custom_fields_attributes"] = _dependent_attributes(dependent_fields)
     optional = {
+        "value_key": value_key,
+        "display_data_view": display_data_view,
         "required": required,
         "default_value": default_value,
         "allow_field_creation": allow_field_creation,
@@ -282,6 +376,8 @@ async def create_custom_field(
     relationships: dict[str, Any] = {}
     if workspace_id:
         relationships["workspace"] = {"data": {"id": workspace_id, "type": "workspace"}}
+    if data_source_id is not None:
+        relationships["data_source"] = _data_source(data_source_id)
     if custom_field_group_id:
         relationships["custom_field_group"] = {"data": {"id": custom_field_group_id, "type": "custom_field_group"}}
     constraints = _constraints(task_type_ids, runbook_type_ids)
@@ -302,6 +398,10 @@ async def update_custom_field(
     custom_field_id: str,
     name: str | None = None,
     add_field_options: list[str] | None = None,
+    data_source_id: int | None = None,
+    value_key: str | None = None,
+    display_data_view: bool | None = None,
+    dependent_fields: list[DependentField] | None = None,
     required: bool | None = None,
     default_value: str | None = None,
     allow_field_creation: bool | None = None,
@@ -322,6 +422,18 @@ async def update_custom_field(
     :param name: The new name.
     :param add_field_options: Option names to add to a select_menu, radiobox or checkboxes field.
         Existing options are kept. Options cannot be renamed or removed through the API.
+    :param data_source_id: Link a searchable or multi_searchable field to this data source
+        instead. Pass value_key too unless the field's value_key is also a mapping of the new
+        data source.
+    :param value_key: The key of each record a searchable or multi_searchable field shows: the
+        mapping of one of the data source's mappings (see get_data_source).
+    :param display_data_view: Show the data source's records in the workspace. Only for
+        searchable and multi_searchable fields.
+    :param dependent_fields: The complete set of dependent fields of a searchable or
+        multi_searchable field. A current dependent field left out is archived, and an archived
+        one listed again is restored; pass [] to archive them all. A listed dependent field that
+        is already active keeps its name and display_search. Start from the field's current
+        dependent fields in list_custom_fields so none is archived by accident.
     :param required: Whether a value must be given.
     :param default_value: The value a new runbook or task starts with.
     :param allow_field_creation: Let users add options from within a runbook.
@@ -335,7 +447,8 @@ async def update_custom_field(
     :param runbook_type_ids: Replace the runbook type constraints with these runbook types. The
         task type constraints are kept. The Cutover API rejects an empty constraint list, so
         constraints cannot be cleared here; archive the field and create a new one instead.
-    :return: The updated field, in the same shape as create_custom_field.
+    :return: The updated field, in the same shape as create_custom_field, without its dependent
+        fields.
     """
     if task_type_ids == [] or runbook_type_ids == []:
         raise ValueError("Constraints cannot be cleared through the API; pass at least one id, or omit the parameter.")
@@ -343,8 +456,12 @@ async def update_custom_field(
     attributes: dict[str, Any] = {}
     if add_field_options:
         attributes["field_options"] = [{"name": option} for option in add_field_options]
+    if dependent_fields is not None:
+        attributes["dependent_custom_fields_attributes"] = _dependent_attributes(dependent_fields)
     optional = {
         "name": name,
+        "value_key": value_key,
+        "display_data_view": display_data_view,
         "required": required,
         "default_value": default_value,
         "allow_field_creation": allow_field_creation,
@@ -355,7 +472,7 @@ async def update_custom_field(
     attributes.update({key: value for key, value in optional.items() if value is not None})
 
     changes_constraints = task_type_ids is not None or runbook_type_ids is not None
-    if not attributes and custom_field_group_id is None and not changes_constraints:
+    if not attributes and custom_field_group_id is None and data_source_id is None and not changes_constraints:
         raise ValueError("Pass at least one field to update.")
 
     client = await client_mgr.get_client()
@@ -366,6 +483,8 @@ async def update_custom_field(
         raise ValueError(
             f"add_field_options is only allowed for select_menu, radiobox and checkboxes, not {current['field_type']}."
         )
+    if current["field_type"] not in SEARCHABLE_FIELD_TYPES:
+        _reject_data_source_link(current["field_type"], data_source_id, value_key, display_data_view, dependent_fields)
 
     # A PATCH that leaves out custom_field_group removes the field from its group, so the
     # current group is sent again unless the caller passes a new group, or "" to remove it.
@@ -375,6 +494,8 @@ async def update_custom_field(
         relationships["custom_field_group"] = {"data": {"id": group_id, "type": "custom_field_group"}}
     elif custom_field_group_id == "":
         relationships["custom_field_group"] = {"data": None}
+    if data_source_id is not None:
+        relationships["data_source"] = _data_source(data_source_id)
 
     # The constraints relationship is replaced as a whole, so the type the caller left out is
     # sent again from the current field.

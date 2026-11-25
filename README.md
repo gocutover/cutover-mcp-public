@@ -38,7 +38,7 @@ The server exposes 52 tools over MCP, grouped into 14 categories.
 | `workspaces` | List, search, fetch, and create workspaces |
 | `teams` | Look up teams associated with a runbook |
 | `users` | Look up and search for users |
-| `custom_fields` | Discover custom fields and their metadata/valid options, and create, update and archive field definitions and groups |
+| `custom_fields` | Discover custom fields and their metadata/valid options, and create, update and archive field definitions and groups, including searchable fields linked to a data source |
 | `data_sources` | Upload the file a data source reads from; create, read, update and archive JSON data sources; test, refresh and sync them, and list their imported records |
 | `folders` | List folders within a workspace |
 | `comments` | Post and read comments on a runbook or task |
@@ -416,11 +416,13 @@ The runbook and task tools accept `custom_field_values` as a list of `{"custom_f
 - `include_global`: When `workspace_id` is set, also include globally available fields alongside the workspace's own (boolean, optional, default true)
 - `scope`: task, runbook, or all (string, optional, default "all") — runbook also covers dashboard fields on the runbook homepage, PIR and Incident Review
 
+A searchable field's dependent fields are nested under it, each with the `value_key` it is filled from.
+
 </details>
 
 <details>
 
-<summary>get_custom_field - Get a custom field's metadata including its type, valid options, group and constraints</summary>
+<summary>get_custom_field - Get a custom field's metadata including its type, valid options, group, constraints and, for searchable fields, data source</summary>
 
 - `custom_field_id`: The custom field to retrieve (string, required)
 
@@ -433,11 +435,15 @@ The tools below change field definitions (the Custom Fields admin page), not the
 <summary>create_custom_field - Create a custom field definition</summary>
 
 - `name`: The field's name (string, required). The API sets the UI label to the same value
-- `field_type`: text, textarea, select_menu, radiobox, checkboxes, datetime or user_select (string, required)
+- `field_type`: text, textarea, select_menu, radiobox, checkboxes, datetime, user_select, searchable or multi_searchable (string, required). A searchable field picks one record of a data source, a multi_searchable field several
 - `apply_to`: runbook_add_edit, runbook_edit, runbook_page, task_add_edit, task_edit, task_start or task_end (string, required)
 - `workspace_id`: The workspace that owns the field (string, required unless `global_field` is true)
 - `global_field`: Create the field for every workspace (boolean, optional, default false)
 - `field_options`: Option names — required for select_menu, radiobox and checkboxes, rejected otherwise (array of string, optional)
+- `data_source_id`: The data source whose records the field searches — required for searchable and multi_searchable, rejected otherwise (integer, optional)
+- `value_key`: The key of each record the field shows: the `mapping` of one of the data source's mappings, for example `app_id` — required for searchable and multi_searchable, rejected otherwise (string, optional)
+- `display_data_view`: Show the data source's records in the workspace — searchable and multi_searchable only (boolean, optional)
+- `dependent_fields`: Text fields filled from the other keys of the picked record, one per key, each `{name, value_key, display_search}`; Cutover puts the field's name in front of each name, so pass short names. Searchable and multi_searchable only, and a `value_key` can fill only one of them (array of object, optional)
 - `required`, `allow_field_creation`, `display_list`, `display_search`, `display_table`: Field settings (boolean, optional)
 - `default_value`: The value a new runbook or task starts with (string, optional)
 - `custom_field_group_id`: The group to show the field in (string, optional)
@@ -452,6 +458,8 @@ The tools below change field definitions (the Custom Fields admin page), not the
 - `custom_field_id`: The field to update (string, required)
 - `name`: The new name (string, optional)
 - `add_field_options`: Option names to add to a select_menu, radiobox or checkboxes field; existing options are kept, and other field types are rejected (array of string, optional)
+- `data_source_id`, `value_key`, `display_data_view`: Link a searchable or multi_searchable field to another data source, change the key it shows, or show or hide its records in the workspace; other field types are rejected (integer, string, boolean, optional)
+- `dependent_fields`: The complete set of a searchable field's dependent fields, each `{name, value_key, display_search}`: one left out is archived, an archived one listed again is restored, `[]` archives them all, and an active one keeps its name and `display_search`. Start from the current set in `list_custom_fields` (array of object, optional)
 - `required`, `allow_field_creation`, `display_list`, `display_search`, `display_table`: Field settings (boolean, optional)
 - `default_value`: The value a new runbook or task starts with (string, optional)
 - `custom_field_group_id`: Move the field to this group, or `""` to take it out of its group; omitted, the field stays in its current group (string, optional)

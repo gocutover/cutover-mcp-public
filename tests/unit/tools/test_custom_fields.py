@@ -190,6 +190,7 @@ async def test_list_custom_fields_nests_dependent_children(mock_client_manager):
                     "display_name": "app_name",
                     "apply_to": "runbook_edit",
                     "field_type": "text",
+                    "value_key": "app_name",
                 },
                 "relationships": {},
             },
@@ -201,6 +202,7 @@ async def test_list_custom_fields_nests_dependent_children(mock_client_manager):
                     "display_name": "category",
                     "apply_to": "runbook_edit",
                     "field_type": "text",
+                    "value_key": "category",
                 },
                 "relationships": {},
             },
@@ -225,6 +227,7 @@ async def test_list_custom_fields_nests_dependent_children(mock_client_manager):
     parent = next(field for field in result if field["id"] == "400")
     assert [child["id"] for child in parent["dependent_fields"]] == ["401", "402"]
     assert [child["display_name"] for child in parent["dependent_fields"]] == ["app_name", "category"]
+    assert [child["value_key"] for child in parent["dependent_fields"]] == ["app_name", "category"]
 
     # A field with no dependents does not get a dependent_fields key.
     animal = next(field for field in result if field["id"] == "88")

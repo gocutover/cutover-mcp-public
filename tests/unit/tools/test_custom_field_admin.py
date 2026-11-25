@@ -167,6 +167,194 @@ async def test_create_custom_field_rejects_bad_input_before_calling_api(mock_cli
     mock_client_manager.request.assert_not_called()
 
 
+def _searchable_response(**attributes):
+    response = _field_response(field_type="searchable", value_key="app_id", display_data_view=True, **attributes)
+    response["data"]["relationships"]["data_source"] = {"data": {"id": "359", "type": "data_source"}}
+    return response
+
+
+@pytest.mark.asyncio
+async def test_create_custom_field_searchable_links_data_source(mock_client_manager):
+    mock_client_manager.request.side_effect = [{"data": {"id": "501"}}, _searchable_response()]
+
+    result = await custom_fields.create_custom_field(
+        name="Application",
+        field_type="searchable",
+        apply_to="runbook_edit",
+        workspace_id="251",
+        data_source_id=359,
+        value_key="app_id",
+        display_data_view=True,
+    )
+
+    data = mock_client_manager.request.call_args_list[0].kwargs["json_data"]["data"]
+    assert data["attributes"] == {
+        "name": "Application",
+        "field_type": "searchable",
+        "apply_to": "runbook_edit",
+        "global": False,
+        "value_key": "app_id",
+        "display_data_view": True,
+    }
+    assert data["relationships"]["data_source"] == {"data": {"id": "359", "type": "data_source"}}
+    assert result["data_source_id"] == "359"
+    assert result["value_key"] == "app_id"
+    assert result["display_data_view"] is True
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("kwargs", "message"),
+    [
+        ({"field_type": "searchable", "value_key": "app_id"}, "data_source_id and value_key are required"),
+        ({"field_type": "multi_searchable", "data_source_id": 359}, "data_source_id and value_key are required"),
+        ({"data_source_id": 359}, "only allowed for searchable and multi_searchable fields, not text"),
+        ({"value_key": "app_id"}, "only allowed for searchable and multi_searchable fields, not text"),
+        ({"display_data_view": False}, "only allowed for searchable and multi_searchable fields, not text"),
+        (
+            {"dependent_fields": [custom_fields.DependentField(name="Owner", value_key="owner")]},
+            "only allowed for searchable and multi_searchable fields, not text",
+        ),
+    ],
+)
+async def test_create_custom_field_rejects_bad_data_source_link(mock_client_manager, kwargs, message):
+    args = {"name": "X", "field_type": "text", "apply_to": "runbook_edit", "workspace_id": "251", **kwargs}
+
+    with pytest.raises(ValueError, match=message):
+        await custom_fields.create_custom_field(**args)
+
+    mock_client_manager.request.assert_not_called()
+
+
+OWNER = custom_fields.DependentField(name="Owner", value_key="owner", display_search=True)
+TIER = custom_fields.DependentField(name="Tier", value_key="tier")
+
+
+@pytest.mark.asyncio
+async def test_create_custom_field_sends_dependent_fields(mock_client_manager):
+    mock_client_manager.request.side_effect = [{"data": {"id": "501"}}, _searchable_response()]
+
+    await custom_fields.create_custom_field(
+        name="Application",
+        field_type="searchable",
+        apply_to="runbook_edit",
+        workspace_id="251",
+        data_source_id=359,
+        value_key="app_id",
+        dependent_fields=[OWNER, TIER],
+    )
+
+    attributes = mock_client_manager.request.call_args_list[0].kwargs["json_data"]["data"]["attributes"]
+    assert attributes["dependent_custom_fields_attributes"] == [
+        {"name": "Owner", "value_key": "owner", "display_search": True},
+        {"name": "Tier", "value_key": "tier"},
+    ]
+
+
+@pytest.mark.asyncio
+async def test_create_custom_field_refuses_two_dependent_fields_with_one_value_key(mock_client_manager):
+    with pytest.raises(ValueError, match="Each value_key can fill only one dependent field: owner"):
+        await custom_fields.create_custom_field(
+            name="Application",
+            field_type="searchable",
+            apply_to="runbook_edit",
+            workspace_id="251",
+            data_source_id=359,
+            value_key="app_id",
+            dependent_fields=[OWNER, custom_fields.DependentField(name="Owner 2", value_key="owner")],
+        )
+
+    mock_client_manager.request.assert_not_called()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("dependent_fields", "sent"),
+    [
+        (
+            [OWNER, TIER],
+            [{"name": "Owner", "value_key": "owner", "display_search": True}, {"name": "Tier", "value_key": "tier"}],
+        ),
+        ([], []),
+    ],
+)
+async def test_update_custom_field_sends_the_complete_set_of_dependent_fields(
+    mock_client_manager, dependent_fields, sent
+):
+    mock_client_manager.request.return_value = _searchable_response()
+
+    await custom_fields.update_custom_field("501", dependent_fields=dependent_fields)
+
+    attributes = mock_client_manager.request.call_args_list[1].kwargs["json_data"]["data"]["attributes"]
+    assert attributes == {"dependent_custom_fields_attributes": sent}
+
+
+@pytest.mark.asyncio
+async def test_update_custom_field_refuses_two_dependent_fields_with_one_value_key(mock_client_manager):
+    with pytest.raises(ValueError, match="Each value_key can fill only one dependent field: tier"):
+        await custom_fields.update_custom_field("501", dependent_fields=[TIER, TIER])
+
+    mock_client_manager.request.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_update_custom_field_rejects_dependent_fields_on_other_field_types(mock_client_manager):
+    mock_client_manager.request.return_value = _field_response(field_type="text")
+
+    with pytest.raises(ValueError, match="only allowed for searchable and multi_searchable fields, not text"):
+        await custom_fields.update_custom_field("501", dependent_fields=[OWNER])
+
+    mock_client_manager.request.assert_called_once_with("GET", "core/custom_fields/501")
+
+
+@pytest.mark.asyncio
+async def test_update_custom_field_relinks_data_source_and_keeps_group(mock_client_manager):
+    mock_client_manager.request.return_value = _searchable_response()
+
+    await custom_fields.update_custom_field("501", data_source_id=360, value_key="name")
+
+    data = mock_client_manager.request.call_args_list[1].kwargs["json_data"]["data"]
+    assert data["attributes"] == {"value_key": "name"}
+    assert data["relationships"] == {
+        "custom_field_group": {"data": {"id": "7", "type": "custom_field_group"}},
+        "data_source": {"data": {"id": "360", "type": "data_source"}},
+    }
+
+
+@pytest.mark.asyncio
+async def test_update_custom_field_data_source_alone_sends_the_name(mock_client_manager):
+    mock_client_manager.request.return_value = _searchable_response(name="Application")
+
+    await custom_fields.update_custom_field("501", data_source_id=360)
+
+    data = mock_client_manager.request.call_args_list[1].kwargs["json_data"]["data"]
+    assert data["attributes"] == {"name": "Application"}
+    assert data["relationships"]["data_source"] == {"data": {"id": "360", "type": "data_source"}}
+
+
+@pytest.mark.asyncio
+async def test_update_custom_field_rejects_data_source_link_on_other_field_types(mock_client_manager):
+    mock_client_manager.request.return_value = _field_response(field_type="text")
+
+    with pytest.raises(ValueError, match="only allowed for searchable and multi_searchable fields, not text"):
+        await custom_fields.update_custom_field("501", display_data_view=True)
+
+    mock_client_manager.request.assert_called_once_with("GET", "core/custom_fields/501")
+
+
+@pytest.mark.asyncio
+async def test_get_custom_field_returns_data_source_link_only_for_searchable_fields(mock_client_manager):
+    mock_client_manager.request.side_effect = [_searchable_response(), _field_response(field_type="text")]
+
+    searchable = await custom_fields.get_custom_field("501")
+    text = await custom_fields.get_custom_field("502")
+
+    assert searchable["data_source_id"] == "359"
+    assert searchable["value_key"] == "app_id"
+    assert searchable["display_data_view"] is True
+    assert "data_source_id" not in text
+
+
 @pytest.mark.asyncio
 async def test_update_custom_field_sends_only_given_fields_and_keeps_group(mock_client_manager):
     current = _field_response()
