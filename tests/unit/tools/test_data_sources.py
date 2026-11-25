@@ -1,5 +1,5 @@
 import re
-from unittest.mock import call
+from unittest.mock import AsyncMock, call, patch
 
 import pytest
 from pydantic import ValidationError
@@ -307,3 +307,228 @@ async def test_archive_data_source(mock_client_manager):
 
     mock_client_manager.request.assert_called_once_with("PATCH", "core/data_sources/12/archive")
     assert result == {"id": 12, "archived": True}
+
+
+@pytest.mark.asyncio
+async def test_manage_data_source_test_returns_the_endpoint_response_truncated(mock_client_manager):
+    body = "x" * 2500
+    mock_client_manager.request.return_value = {
+        "data": {"attributes": {"status": 200, "url": "https://ds/abc?query=%2A", "body": body}}
+    }
+
+    result = await data_sources.manage_data_source(12, "test")
+
+    mock_client_manager.request.assert_called_once_with("GET", "core/data_sources/12/test", params={"query": "*"})
+    assert result == {
+        "id": 12,
+        "action": "test",
+        "status": 200,
+        "url": "https://ds/abc?query=%2A",
+        "body": "x" * 2000,
+        "body_truncated": True,
+    }
+
+
+@pytest.mark.asyncio
+async def test_manage_data_source_refresh_returns_the_number_of_keys_added(mock_client_manager):
+    mock_client_manager.request.return_value = {"data": {"attributes": {"total_added": 3}}}
+
+    result = await data_sources.manage_data_source(12, "refresh", query="APP-0001")
+
+    mock_client_manager.request.assert_called_once_with(
+        "PATCH", "core/data_sources/12/refresh", params={"query": "APP-0001"}
+    )
+    assert result == {"id": 12, "action": "refresh", "total_added": 3}
+
+
+def _sync_state(status, started_at=None, error=None):
+    return {"data": _data_source(last_sync_status=status, last_sync_started_at=started_at, last_sync_error=error)}
+
+
+@pytest.fixture
+def fake_clock():
+    clock = [0.0]
+
+    async def sleep(seconds):
+        clock[0] += seconds
+
+    with (
+        patch.object(data_sources, "_now", side_effect=lambda: clock[0]),
+        patch.object(data_sources.asyncio, "sleep", new=AsyncMock(side_effect=sleep)) as sleep_mock,
+    ):
+        yield sleep_mock
+
+
+@pytest.mark.asyncio
+async def test_sync_waits_until_its_own_import_finishes(mock_client_manager, fake_clock):
+    mock_client_manager.request.side_effect = [
+        _sync_state("succeeded", "2026-11-17T05:00:00Z"),
+        {},
+        _sync_state("succeeded", "2026-11-17T05:00:00Z"),
+        _sync_state("running", "2026-11-18T15:00:00Z"),
+        _sync_state("succeeded", "2026-11-18T15:00:00Z"),
+    ]
+
+    result = await data_sources.manage_data_source(12, "sync")
+
+    assert mock_client_manager.request.call_args_list[1] == call("POST", "core/data_sources/12/sync")
+    assert fake_clock.await_count == 2
+    assert result["finished"] is True
+    assert result["already_running"] is False
+    assert result["last_sync_status"] == "succeeded"
+    assert result["last_sync_started_at"] == "2026-11-18T15:00:00Z"
+    assert "message" not in result
+
+
+@pytest.mark.asyncio
+async def test_sync_reports_a_failed_import_with_its_error(mock_client_manager, fake_clock):
+    mock_client_manager.request.side_effect = [
+        _sync_state(None),
+        {},
+        _sync_state("failed", "2026-11-18T15:00:00Z", "1 of 4 records could not be saved"),
+    ]
+
+    result = await data_sources.manage_data_source(12, "sync")
+
+    assert result["finished"] is True
+    assert result["last_sync_status"] == "failed"
+    assert result["last_sync_error"] == "1 of 4 records could not be saved"
+
+
+@pytest.mark.asyncio
+async def test_sync_joins_an_import_already_in_progress_when_the_api_answers_409(mock_client_manager, fake_clock):
+    mock_client_manager.request.side_effect = [
+        _sync_state("running", "2026-11-18T15:00:00Z"),
+        CutoverAPIError(409, "core/data_sources/12/sync", ["An import is already in progress for this data source."]),
+        _sync_state("succeeded", "2026-11-18T15:00:00Z"),
+    ]
+
+    result = await data_sources.manage_data_source(12, "sync")
+
+    assert result["finished"] is True
+    assert result["already_running"] is True
+    assert result["last_sync_status"] == "succeeded"
+
+
+@pytest.mark.asyncio
+async def test_sync_returns_a_message_when_the_import_outlasts_wait_seconds(mock_client_manager, fake_clock):
+    mock_client_manager.request.side_effect = [_sync_state("succeeded", "2026-11-17T05:00:00Z"), {}] + [
+        _sync_state("queued", "2026-11-17T05:00:00Z")
+    ] * 3
+
+    result = await data_sources.manage_data_source(12, "sync", wait_seconds=10)
+
+    assert fake_clock.await_count == 2
+    assert result["finished"] is False
+    assert result["last_sync_status"] == "queued"
+    assert result["message"].startswith("The import had not finished after 10 seconds.")
+
+
+@pytest.mark.asyncio
+async def test_sync_with_no_wait_returns_once_queued(mock_client_manager, fake_clock):
+    mock_client_manager.request.side_effect = [_sync_state(None), {}, _sync_state("queued")]
+
+    result = await data_sources.manage_data_source(12, "sync", wait_seconds=0)
+
+    fake_clock.assert_not_awaited()
+    assert result["finished"] is False
+    assert result["last_sync_status"] == "queued"
+
+
+@pytest.mark.asyncio
+async def test_sync_passes_on_other_api_errors(mock_client_manager, fake_clock):
+    refused = CutoverAPIError(422, "core/data_sources/12/sync", ["Data source must persist all records."])
+    mock_client_manager.request.side_effect = [_sync_state(None), refused]
+
+    with pytest.raises(CutoverAPIError) as raised:
+        await data_sources.manage_data_source(12, "sync")
+
+    assert raised.value is refused
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("wait_seconds", [-1, 51])
+async def test_sync_rejects_wait_seconds_out_of_range_before_calling_the_api(mock_client_manager, wait_seconds):
+    with pytest.raises(ValueError, match="wait_seconds must be between 0 and 50"):
+        await data_sources.manage_data_source(12, "sync", wait_seconds=wait_seconds)
+
+    mock_client_manager.request.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_sync_does_not_report_an_earlier_running_import_as_its_own(mock_client_manager, fake_clock):
+    mock_client_manager.request.side_effect = [
+        _sync_state("running", "2026-11-18T15:00:00Z"),
+        {},
+        _sync_state("succeeded", "2026-11-18T15:00:00Z"),
+        _sync_state("running", "2026-11-18T15:01:00Z"),
+        _sync_state("succeeded", "2026-11-18T15:01:00Z"),
+    ]
+
+    result = await data_sources.manage_data_source(12, "sync")
+
+    assert result["finished"] is True
+    assert result["already_running"] is False
+    assert result["last_sync_started_at"] == "2026-11-18T15:01:00Z"
+
+
+@pytest.mark.asyncio
+async def test_wait_seconds_is_only_checked_for_sync(mock_client_manager):
+    mock_client_manager.request.return_value = {"data": {"attributes": {"status": 200, "body": "[]"}}}
+
+    result = await data_sources.manage_data_source(12, "test", wait_seconds=600)
+
+    assert result["status"] == 200
+
+
+@pytest.mark.asyncio
+async def test_list_data_source_values_returns_one_page(mock_client_manager):
+    mock_client_manager.request.return_value = {
+        "data": [
+            {"id": "1", "attributes": {"key": "APP-0001", "values": {"app_id": "APP-0001", "owner": "Payments"}}},
+            {"id": "2", "attributes": {"key": "APP-0002", "values": {"app_id": "APP-0002"}}},
+        ],
+        "meta": {"page": {"number": 2, "total": 45}},
+        "links": {"next": "https://api.example.com/core/custom_fields/756/data_source_values?page[number]=3"},
+    }
+
+    result = await data_sources.list_data_source_values("756", page=2)
+
+    mock_client_manager.request.assert_called_once_with(
+        "GET", "core/custom_fields/756/data_source_values", params={"page[number]": 2}
+    )
+    assert result == {
+        "values": [
+            {"key": "APP-0001", "values": {"app_id": "APP-0001", "owner": "Payments"}},
+            {"key": "APP-0002", "values": {"app_id": "APP-0002"}},
+        ],
+        "page": 2,
+        "total_records": 45,
+        "has_more": True,
+    }
+
+
+@pytest.mark.asyncio
+async def test_list_data_source_values_last_page_has_no_more(mock_client_manager):
+    mock_client_manager.request.return_value = {"data": [], "meta": {"page": {"number": 3, "total": 45}}, "links": {}}
+
+    result = await data_sources.list_data_source_values("756", page=3)
+
+    assert result["has_more"] is False
+
+
+@pytest.mark.asyncio
+async def test_list_data_source_values_rejects_a_page_below_1_before_calling_the_api(mock_client_manager):
+    with pytest.raises(ValueError, match="page must be 1 or more"):
+        await data_sources.list_data_source_values("756", page=0)
+
+    mock_client_manager.request.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_list_data_source_values_returns_an_empty_dict_for_null_values(mock_client_manager):
+    mock_client_manager.request.return_value = {"data": [{"attributes": {"key": "APP-0001", "values": None}}]}
+
+    result = await data_sources.list_data_source_values("756")
+
+    assert result["values"] == [{"key": "APP-0001", "values": {}}]

@@ -1,11 +1,22 @@
+import asyncio
+import time
 from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
 from cutover_mcp.app import mcp
-from cutover_mcp.clients.api import client_mgr
+from cutover_mcp.clients.api import CutoverAPIError, client_mgr
 
 PersistMode = Literal["query_cache", "persist_all"]
+
+SYNC_POLL_SECONDS = 5
+# Keeps a sync call, with its HTTP requests, under the 60-second tool call timeout many MCP clients use.
+MAX_SYNC_WAIT_SECONDS = 50
+TEST_BODY_LIMIT = 2000
+
+
+def _now() -> float:
+    return time.monotonic()
 
 
 class DataSourceMapping(BaseModel):
@@ -48,6 +59,11 @@ def _build_data_source(item: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+async def _fetch_data_source(client: Any, data_source_id: int) -> dict[str, Any]:
+    response = await client.request("GET", f"core/data_sources/{data_source_id}")
+    return _build_data_source(response.get("data", {}))
+
+
 @mcp.tool()
 async def list_data_sources(archived: bool = False, query: str | None = None) -> list[dict[str, Any]]:
     """
@@ -88,8 +104,7 @@ async def get_data_source(data_source_id: int) -> dict[str, Any]:
         last_sync_started_at, last_synced_at, created_at and updated_at.
     """
     client = await client_mgr.get_client()
-    response = await client.request("GET", f"core/data_sources/{data_source_id}")
-    return _build_data_source(response.get("data", {}))
+    return await _fetch_data_source(client, data_source_id)
 
 
 @mcp.tool()
@@ -201,6 +216,142 @@ async def archive_data_source(data_source_id: int) -> dict[str, Any]:
     return {"id": data_source_id, "archived": True}
 
 
+def _sync_result(
+    data_source: dict[str, Any], finished: bool, already_running: bool, wait_seconds: int
+) -> dict[str, Any]:
+    result = {
+        "id": data_source["id"],
+        "action": "sync",
+        "finished": finished,
+        "already_running": already_running,
+        "last_sync_status": data_source["last_sync_status"],
+        "last_sync_error": data_source["last_sync_error"],
+        "last_sync_started_at": data_source["last_sync_started_at"],
+        "last_synced_at": data_source["last_synced_at"],
+    }
+    if not finished:
+        result["message"] = (
+            f"The import had not finished after {wait_seconds} seconds. Call get_data_source later and "
+            "check last_sync_status; until the import finishes, it may still show the previous import's result."
+        )
+    return result
+
+
+@mcp.tool()
+async def manage_data_source(
+    data_source_id: int,
+    action: Literal["test", "refresh", "sync"],
+    query: str = "*",
+    wait_seconds: int = 30,
+) -> dict[str, Any]:
+    """
+    Run an action on a data source: test, refresh or sync. Data sources reached through Cutover
+    Connect do not support test or refresh.
+
+    - test: searches the data source's url for query and returns the HTTP status and body it
+      answered with, without storing anything. Use it to check url, records_path and
+      search_parameter_name, and after an upload to check the file can be read: it cannot be
+      read until its malware scan finishes. Requires the Custom Fields Admin role.
+    - refresh: searches for query and adds every key of the returned records that is not yet in
+      mappings. Run it, then sync, after uploading a new version of a file with new columns.
+    - sync: imports every record of a persist_all data source into Cutover, then waits up to
+      wait_seconds for the import to finish. The API refuses a data source that is not
+      persist_all or is archived. Requires the Custom Fields Admin role.
+
+    :param data_source_id: The ID of the data source (from list_data_sources).
+    :param action: test, refresh or sync.
+    :param query: The search term for test and refresh. * matches every record of an uploaded file.
+    :param wait_seconds: For sync, how long to wait for the import to finish, from 0 to 50. 0
+        returns as soon as the import is queued.
+    :return: For test: status, url (with the search term applied) and body (the first 2000
+        characters, with body_truncated). For refresh: total_added, the number of keys added to
+        mappings. For sync: finished, already_running (true when an import was already queued or
+        running, and this call waited for it), last_sync_status (queued, running, succeeded or
+        failed), last_sync_error, last_sync_started_at, last_synced_at, and a message when the
+        import has not finished within wait_seconds. A failed import may still have stored some
+        records.
+    """
+    if action == "sync" and not 0 <= wait_seconds <= MAX_SYNC_WAIT_SECONDS:
+        raise ValueError(f"wait_seconds must be between 0 and {MAX_SYNC_WAIT_SECONDS}.")
+
+    client = await client_mgr.get_client()
+    path = f"core/data_sources/{data_source_id}"
+
+    if action == "test":
+        response = await client.request("GET", f"{path}/test", params={"query": query})
+        attributes = response.get("data", {}).get("attributes", {})
+        body = attributes.get("body") or ""
+        return {
+            "id": data_source_id,
+            "action": "test",
+            "status": attributes.get("status"),
+            "url": attributes.get("url"),
+            "body": body[:TEST_BODY_LIMIT],
+            "body_truncated": len(body) > TEST_BODY_LIMIT,
+        }
+
+    if action == "refresh":
+        response = await client.request("PATCH", f"{path}/refresh", params={"query": query})
+        attributes = response.get("data", {}).get("attributes", {})
+        return {"id": data_source_id, "action": "refresh", "total_added": attributes.get("total_added")}
+
+    deadline = _now() + wait_seconds
+    before = await _fetch_data_source(client, data_source_id)
+    already_running = False
+    try:
+        await client.request("POST", f"{path}/sync")
+    except CutoverAPIError as error:
+        if error.status_code != 409:
+            raise
+        already_running = True
+
+    # A succeeded or failed status is this import's once last_sync_started_at differs from before
+    # the request; after a 409 it is the result of the import already in progress.
+    def finished(current: dict[str, Any]) -> bool:
+        return current["last_sync_status"] in ("succeeded", "failed") and (
+            already_running or current["last_sync_started_at"] != before["last_sync_started_at"]
+        )
+
+    current = await _fetch_data_source(client, data_source_id)
+    while not finished(current) and _now() < deadline:
+        await asyncio.sleep(min(SYNC_POLL_SECONDS, deadline - _now()))
+        current = await _fetch_data_source(client, data_source_id)
+
+    return _sync_result(current, finished(current), already_running, wait_seconds)
+
+
+@mcp.tool()
+async def list_data_source_values(custom_field_id: str, page: int = 1) -> dict[str, Any]:
+    """
+    List the data source records stored in Cutover for a searchable or multi searchable custom
+    field, one page at a time. Each record's values holds only the keys of the custom field and
+    of its active dependent custom fields.
+
+    :param custom_field_id: The ID of a searchable or multi searchable custom field (from
+        list_custom_fields).
+    :param page: The page to return, starting at 1.
+    :return: values (each {key, values}, where key is the value of the data source's primary
+        mapping), page, total_records and has_more (whether a later page exists).
+    """
+    if page < 1:
+        raise ValueError("page must be 1 or more.")
+
+    client = await client_mgr.get_client()
+    response = await client.request(
+        "GET", f"core/custom_fields/{custom_field_id}/data_source_values", params={"page[number]": page}
+    )
+    page_meta = response.get("meta", {}).get("page", {})
+    return {
+        "values": [
+            {"key": item.get("attributes", {}).get("key"), "values": item.get("attributes", {}).get("values") or {}}
+            for item in response.get("data", [])
+        ],
+        "page": page_meta.get("number", page),
+        "total_records": page_meta.get("total"),
+        "has_more": bool(response.get("links", {}).get("next")),
+    }
+
+
 @mcp.tool()
 async def get_data_source_upload_url(file_name: str, data_source_id: int | None = None) -> dict[str, Any]:
     """
@@ -220,15 +371,15 @@ async def get_data_source_upload_url(file_name: str, data_source_id: int | None 
 
     For a new data source, call create_data_source with datasource_endpoint_url as its url and
     leave out records_path and search_parameter_name. The file is scanned for malware after
-    upload, so test the data source can read it before importing.
+    upload, so run manage_data_source with action test before the first sync.
 
     :param file_name: Name of the file to upload, e.g. "cmdb.csv". Used to build the storage key.
     :param data_source_id: Omit for the first upload, before the data source exists. To upload a
         new version of the file behind a data source created over an uploaded file, pass that data
         source's ID; the new file replaces the old one. Fails, before any upload, if the data
         source reads from anywhere else, since its url cannot be changed: upload without
-        data_source_id and create a new data source instead. After uploading, refresh and sync
-        the data source to pick up the changes.
+        data_source_id and create a new data source instead. After uploading, run
+        manage_data_source with action refresh, then sync, to pick up the changes.
     :return: url (PUT the file here), expires_in (seconds the url stays valid),
         datasource_endpoint_url (the url the data source reads the file from) and reference_id
         (the server-generated reference for the uploaded file).

@@ -24,7 +24,7 @@ An MCP server for interacting with the Cutover API, powered by FastMCP.
 
 ## Capabilities
 
-The server exposes 50 tools over MCP, grouped into 14 categories.
+The server exposes 52 tools over MCP, grouped into 14 categories.
 
 ### Tool Groups
 
@@ -39,7 +39,7 @@ The server exposes 50 tools over MCP, grouped into 14 categories.
 | `teams` | Look up teams associated with a runbook |
 | `users` | Look up and search for users |
 | `custom_fields` | Discover custom fields and their metadata/valid options, and create, update and archive field definitions and groups |
-| `data_sources` | Upload the file a data source reads from, and create, read, update and archive JSON data sources |
+| `data_sources` | Upload the file a data source reads from; create, read, update and archive JSON data sources; test, refresh and sync them, and list their imported records |
 | `folders` | List folders within a workspace |
 | `comments` | Post and read comments on a runbook or task |
 | `activities` | Read a runbook's activity trail |
@@ -564,12 +564,36 @@ Fails while an active custom field uses the data source; archive those fields fi
 
 <details>
 
+<summary>manage_data_source - Test, refresh or sync a data source</summary>
+
+- `data_source_id`: The data source's ID (integer, required)
+- `action`: `test`, `refresh` or `sync` (string, required)
+- `query`: The search term for `test` and `refresh` (string, optional, default `*`, which matches every record of an uploaded file)
+- `wait_seconds`: For `sync`, how long to wait for the import to finish, from 0 to 50 (integer, optional, default 30)
+
+`test` searches the data source's URL and returns the HTTP status, URL and body it answered with (the body cut to 2000 characters), without storing anything; run it after an upload, before the first sync, since the file cannot be read until its malware scan finishes. `refresh` adds every key of the returned records that is not yet in `mappings` and returns `total_added`. `sync` imports every record of a `persist_all` data source and waits for the import to finish, returning `finished`, `last_sync_status`, `last_sync_error` and the import times, or a message when it has not finished after `wait_seconds`. If an import is already in progress, `sync` waits for that one and returns `already_running: true`. Data sources reached through Cutover Connect do not support `test` or `refresh`.
+
+</details>
+
+<details>
+
+<summary>list_data_source_values - List the data source records stored for a searchable custom field</summary>
+
+- `custom_field_id`: The ID of a searchable or multi searchable custom field (string, required)
+- `page`: The page to return, starting at 1 (integer, optional, default 1)
+
+Returns `values` (each `{key, values}`, where `key` is the value of the data source's primary mapping), `page`, `total_records` and `has_more`. Each record's `values` holds only the keys of the custom field and of its active dependent custom fields.
+
+</details>
+
+<details>
+
 <summary>get_data_source_upload_url - Get a signed URL to upload a file for a data source</summary>
 
 - `file_name`: Name of the file to upload, e.g. `cmdb.csv` (string, required)
 - `data_source_id`: A data source created over an uploaded file, to upload a new version of its file; omit for the first upload (integer, optional)
 
-The server cannot read files on your machine, so the agent uploads the file itself with an HTTP `PUT` to the returned `url` before it expires (`expires_in` seconds), then calls `create_data_source` with the returned `datasource_endpoint_url` as its URL. With `data_source_id`, fails before any upload unless that data source already reads from the returned `datasource_endpoint_url`, since a data source's URL cannot be changed; after uploading a new version, refresh and sync the data source. Fails with a clear error if the instance's data source search service is not configured.
+The server cannot read files on your machine, so the agent uploads the file itself with an HTTP `PUT` to the returned `url` before it expires (`expires_in` seconds), then calls `create_data_source` with the returned `datasource_endpoint_url` as its URL. With `data_source_id`, fails before any upload unless that data source already reads from the returned `datasource_endpoint_url`, since a data source's URL cannot be changed; after uploading a new version, refresh and sync it with `manage_data_source`. Fails with a clear error if the instance's data source search service is not configured.
 
 </details>
 

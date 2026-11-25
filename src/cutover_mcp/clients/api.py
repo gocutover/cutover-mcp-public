@@ -262,8 +262,8 @@ class APIClient:
                     params=params,
                 )
                 response.raise_for_status()
-                # Return empty dict for 204 No Content responses
-                return response.json() if response.status_code != 204 else {}
+                # A 204, or a 202 that only queues work, has no body.
+                return response.json() if response.content else {}
             except (httpx.RequestError, httpx.HTTPStatusError) as e:
                 if attempt == 2 or (
                     isinstance(e, httpx.HTTPStatusError)

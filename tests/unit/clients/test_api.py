@@ -108,6 +108,19 @@ async def test_returns_none_when_client_does_not_support_elicitation():
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("status", [202, 204])
+async def test_request_returns_an_empty_dict_for_a_response_without_a_body(status):
+    client = APIClient(base_url="https://api.example.com", api_key="token")
+
+    with respx.mock(base_url="https://api.example.com") as mock:
+        mock.post("/widgets/1/sync").mock(return_value=httpx.Response(status))
+
+        assert await client.request("POST", "widgets/1/sync") == {}
+
+    await client.aclose()
+
+
+@pytest.mark.asyncio
 async def test_request_error_includes_json_response_body():
     """A non-retryable 4xx error should surface the parsed JSON:API error detail."""
     client = APIClient(base_url="https://api.example.com", api_key="token")
