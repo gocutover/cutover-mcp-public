@@ -3,9 +3,10 @@ from typing import Any
 from cutover_mcp.app import mcp
 from cutover_mcp.clients.api import client_mgr
 from cutover_mcp.models import FolderListResponse, inject_return_schema
+from cutover_mcp.tools.annotations import READ_ONLY
 
 
-@mcp.tool()
+@mcp.tool(annotations=READ_ONLY)
 @inject_return_schema
 async def list_folders(workspace_id: str) -> FolderListResponse:
     """

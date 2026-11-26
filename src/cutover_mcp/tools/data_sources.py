@@ -6,6 +6,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from cutover_mcp.app import mcp
 from cutover_mcp.clients.api import CutoverAPIError, client_mgr
+from cutover_mcp.tools.annotations import READ_ONLY, writes
 
 PersistMode = Literal["query_cache", "persist_all"]
 
@@ -64,7 +65,7 @@ async def _fetch_data_source(client: Any, data_source_id: int) -> dict[str, Any]
     return _build_data_source(response.get("data", {}))
 
 
-@mcp.tool()
+@mcp.tool(annotations=READ_ONLY)
 async def list_data_sources(archived: bool = False, query: str | None = None) -> list[dict[str, Any]]:
     """
     List the instance's JSON data sources. Data sources created by an integration are not
@@ -91,7 +92,7 @@ async def list_data_sources(archived: bool = False, query: str | None = None) ->
     return data_sources
 
 
-@mcp.tool()
+@mcp.tool(annotations=READ_ONLY)
 async def get_data_source(data_source_id: int) -> dict[str, Any]:
     """
     Get a data source. Requires the Custom Fields Admin or Global Stakeholder role.
@@ -107,7 +108,7 @@ async def get_data_source(data_source_id: int) -> dict[str, Any]:
     return await _fetch_data_source(client, data_source_id)
 
 
-@mcp.tool()
+@mcp.tool(annotations=writes(destructive=False, idempotent=False))
 async def create_data_source(
     name: str,
     url: str,
@@ -174,7 +175,7 @@ async def create_data_source(
     return _build_data_source(response.get("data", {}))
 
 
-@mcp.tool()
+@mcp.tool(annotations=writes(destructive=False, idempotent=True))
 async def update_data_source(
     data_source_id: int,
     name: str | None = None,
@@ -202,7 +203,7 @@ async def update_data_source(
     return _build_data_source(response.get("data", {}))
 
 
-@mcp.tool()
+@mcp.tool(annotations=writes(destructive=True, idempotent=True))
 async def archive_data_source(data_source_id: int) -> dict[str, Any]:
     """
     Archive a data source. It cannot be archived while an active custom field uses it; archive
@@ -237,7 +238,7 @@ def _sync_result(
     return result
 
 
-@mcp.tool()
+@mcp.tool(annotations=writes(destructive=True, idempotent=False, open_world=True))
 async def manage_data_source(
     data_source_id: int,
     action: Literal["test", "refresh", "sync"],
@@ -320,7 +321,7 @@ async def manage_data_source(
     return _sync_result(current, finished(current), already_running, wait_seconds)
 
 
-@mcp.tool()
+@mcp.tool(annotations=READ_ONLY)
 async def list_data_source_values(custom_field_id: str, page: int = 1) -> dict[str, Any]:
     """
     List the data source records stored in Cutover for a searchable or multi searchable custom
@@ -352,7 +353,7 @@ async def list_data_source_values(custom_field_id: str, page: int = 1) -> dict[s
     }
 
 
-@mcp.tool()
+@mcp.tool(annotations=writes(destructive=True, idempotent=False))
 async def get_data_source_upload_url(file_name: str, data_source_id: int | None = None) -> dict[str, Any]:
     """
     Get a short-lived, pre-signed URL for uploading a file that a data source reads from, such

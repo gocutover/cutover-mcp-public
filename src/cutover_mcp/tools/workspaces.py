@@ -2,9 +2,10 @@ from typing import Any
 
 from cutover_mcp.app import mcp
 from cutover_mcp.clients.api import client_mgr
+from cutover_mcp.tools.annotations import READ_ONLY, writes
 
 
-@mcp.tool()
+@mcp.tool(annotations=READ_ONLY)
 async def get_workspace_by_id(workspace_id: str) -> dict[str, Any]:
     """
     Fetch details for a specific workspace by its ID.
@@ -16,7 +17,7 @@ async def get_workspace_by_id(workspace_id: str) -> dict[str, Any]:
     return await client.request("GET", f"core/workspaces/{workspace_id}")
 
 
-@mcp.tool()
+@mcp.tool(annotations=READ_ONLY)
 async def query_workspaces(query: str) -> dict[str, Any]:
     """
     Search for workspaces by name or query string.
@@ -29,7 +30,7 @@ async def query_workspaces(query: str) -> dict[str, Any]:
     return await client.request("GET", "core/workspaces", params=params)
 
 
-@mcp.tool()
+@mcp.tool(annotations=READ_ONLY)
 async def list_workspaces(limit: int = 50, offset: int = 0) -> dict:
     """
     List all workspaces.
@@ -43,7 +44,7 @@ async def list_workspaces(limit: int = 50, offset: int = 0) -> dict:
     return await client.request("GET", "core/workspaces", params=params)
 
 
-@mcp.tool()
+@mcp.tool(annotations=writes(destructive=False, idempotent=False))
 async def create_workspace(name: str, key: str, description: str = "") -> dict:
     """
     Create a new account/workspace.

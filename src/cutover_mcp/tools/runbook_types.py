@@ -5,6 +5,7 @@ from cutover_mcp.models import (
     RunbookTypeResponse,
     inject_return_schema,
 )
+from cutover_mcp.tools.annotations import READ_ONLY
 
 
 async def _fetch_all_runbook_types() -> RunbookTypeListResponse:
@@ -39,7 +40,7 @@ async def _fetch_all_runbook_types() -> RunbookTypeListResponse:
     )
 
 
-@mcp.tool()
+@mcp.tool(annotations=READ_ONLY)
 @inject_return_schema
 async def list_runbook_types() -> RunbookTypeListResponse:
     """
@@ -55,7 +56,7 @@ async def list_runbook_types() -> RunbookTypeListResponse:
     return await _fetch_all_runbook_types()
 
 
-@mcp.tool()
+@mcp.tool(annotations=READ_ONLY)
 @inject_return_schema
 async def get_runbook_type_by_id(runbook_type_id: str) -> RunbookTypeResponse:
     """
@@ -74,7 +75,7 @@ async def get_runbook_type_by_id(runbook_type_id: str) -> RunbookTypeResponse:
     return RunbookTypeResponse(**response)
 
 
-@mcp.tool()
+@mcp.tool(annotations=READ_ONLY)
 @inject_return_schema
 async def query_runbook_types(
     query: str | None = None,

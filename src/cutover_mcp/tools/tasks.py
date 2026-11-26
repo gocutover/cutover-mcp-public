@@ -11,9 +11,10 @@ from cutover_mcp.models import (
     inject_return_schema,
     serialize_custom_field_values,
 )
+from cutover_mcp.tools.annotations import writes
 
 
-@mcp.tool()
+@mcp.tool(annotations=writes(destructive=False, idempotent=False))
 @inject_return_schema
 async def add_task_to_runbook(
     runbook_id: str,
@@ -130,7 +131,7 @@ async def add_task_to_runbook(
     return TaskResponse(**response)
 
 
-@mcp.tool()
+@mcp.tool(annotations=writes(destructive=False, idempotent=True))
 @inject_return_schema
 async def update_runbook_task(
     runbook_id: str,
@@ -251,7 +252,7 @@ async def update_runbook_task(
     return TaskResponse(**response)
 
 
-@mcp.tool()
+@mcp.tool(annotations=writes(destructive=True, idempotent=False, open_world=True))
 async def start_task(runbook_id: str, task_id: str) -> TaskResponse:
     """
     Start a specific task in a runbook.
@@ -265,7 +266,7 @@ async def start_task(runbook_id: str, task_id: str) -> TaskResponse:
     return TaskResponse(**response)
 
 
-@mcp.tool()
+@mcp.tool(annotations=writes(destructive=True, idempotent=False, open_world=True))
 async def complete_task(runbook_id: str, task_id: str) -> TaskResponse:
     """
     Complete a specific task in a runbook.
@@ -279,7 +280,7 @@ async def complete_task(runbook_id: str, task_id: str) -> TaskResponse:
     return TaskResponse(**response)
 
 
-@mcp.tool()
+@mcp.tool(annotations=writes(destructive=True, idempotent=False, open_world=True))
 async def skip_task(runbook_id: str, task_id: str, comment: str) -> dict[str, Any]:
     """
     Skip a specific task in a runbook.
@@ -296,7 +297,7 @@ async def skip_task(runbook_id: str, task_id: str, comment: str) -> dict[str, An
     return await client.request("PATCH", f"core/runbooks/{runbook_id}/tasks/{task_id}/skip", json_data=payload)
 
 
-@mcp.tool()
+@mcp.tool(annotations=writes(destructive=True, idempotent=True))
 async def delete_task(runbook_id: str, task_id: str) -> dict[str, Any]:
     """
     Delete a single task from a runbook.

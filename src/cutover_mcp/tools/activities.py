@@ -2,9 +2,10 @@ from typing import Any
 
 from cutover_mcp.app import mcp
 from cutover_mcp.clients.api import client_mgr
+from cutover_mcp.tools.annotations import READ_ONLY
 
 
-@mcp.tool()
+@mcp.tool(annotations=READ_ONLY)
 async def get_activities(
     runbook_id: str,
     created_after: str | None = None,

@@ -11,9 +11,10 @@ from cutover_mcp.models import (
     inject_return_schema,
     serialize_custom_field_values,
 )
+from cutover_mcp.tools.annotations import READ_ONLY, writes
 
 
-@mcp.tool()
+@mcp.tool(annotations=READ_ONLY)
 @inject_return_schema
 async def get_runbook_by_id(runbook_id: str) -> RunbookResponse:
     """
@@ -32,7 +33,7 @@ async def get_runbook_by_id(runbook_id: str) -> RunbookResponse:
     return RunbookResponse(**response)
 
 
-@mcp.tool()
+@mcp.tool(annotations=READ_ONLY)
 async def list_runbooks(
     workspace_id: str,
     is_template: bool | None = None,
@@ -90,7 +91,7 @@ async def list_runbooks(
     )
 
 
-@mcp.tool()
+@mcp.tool(annotations=READ_ONLY)
 @inject_return_schema
 async def get_runbook_tasks(
     runbook_id: str,
@@ -202,7 +203,7 @@ async def get_runbook_tasks(
     )
 
 
-@mcp.tool()
+@mcp.tool(annotations=writes(destructive=False, idempotent=False))
 async def update_runbook(
     runbook_id: str,
     name: str | None = None,
@@ -303,7 +304,7 @@ async def update_runbook(
     return RunbookResponse(**response)
 
 
-@mcp.tool()
+@mcp.tool(annotations=writes(destructive=False, idempotent=False))
 async def create_runbook(
     name: str,
     workspace_id: str | None = None,
@@ -440,7 +441,7 @@ async def create_runbook(
     return RunbookResponse(**response)
 
 
-@mcp.tool()
+@mcp.tool(annotations=writes(destructive=True, idempotent=False, open_world=True))
 async def manage_runbook(
     runbook_id: str,
     action: Literal["start", "cancel", "pause", "resume"],
@@ -513,7 +514,7 @@ async def manage_runbook(
     return await client.request("PATCH", endpoint, json_data=payload)
 
 
-@mcp.tool()
+@mcp.tool(annotations=READ_ONLY)
 async def get_runbook_template_copies(
     runbook_id: str,
 ) -> RunbookListResponse:

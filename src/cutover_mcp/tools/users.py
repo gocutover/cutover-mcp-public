@@ -2,6 +2,7 @@ from typing import Any
 
 from cutover_mcp.app import mcp
 from cutover_mcp.clients.api import client_mgr
+from cutover_mcp.tools.annotations import READ_ONLY
 
 
 def _parse_user(user_data: dict[str, Any]) -> dict[str, Any]:
@@ -16,7 +17,7 @@ def _parse_user(user_data: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-@mcp.tool()
+@mcp.tool(annotations=READ_ONLY)
 async def get_user(
     user_id: str,
 ) -> dict[str, Any]:
@@ -31,7 +32,7 @@ async def get_user(
     return _parse_user(response.get("data", {}))
 
 
-@mcp.tool()
+@mcp.tool(annotations=READ_ONLY)
 async def search_users(
     query: str,
 ) -> list[dict[str, Any]]:

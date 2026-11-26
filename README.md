@@ -24,7 +24,7 @@ An MCP server for interacting with the Cutover API, powered by FastMCP.
 
 ## Capabilities
 
-The server exposes 52 tools over MCP, grouped into 14 categories.
+The server exposes 52 tools over MCP, grouped into 14 categories. 27 of them are read-only; see [Tool annotations](#tool-annotations).
 
 ### Tool Groups
 
@@ -44,6 +44,21 @@ The server exposes 52 tools over MCP, grouped into 14 categories.
 | `comments` | Post and read comments on a runbook or task |
 | `activities` | Read a runbook's activity trail |
 | `action_logs` | Read the platform audit log |
+
+### Tool annotations
+
+Every tool declares the MCP tool annotations `readOnlyHint`, `destructiveHint`, `idempotentHint` and `openWorldHint`, so an MCP client can tell the 27 read-only tools from the 25 that change data, and ask for approval only where it is needed. A tool is destructive when its change cannot be undone; creating and updating are not destructive. Set `MCP_READ_ONLY=true` to run the server with only the read-only tools.
+
+| Kind | `readOnlyHint` | `destructiveHint` | `idempotentHint` | Tools |
+| --- | --- | --- | --- | --- |
+| Reads | true | false | true | `get_action_logs`, `get_activities`, `get_comments`, `get_custom_field`, `get_data_source`, `get_integration_task_type_details`, `get_runbook_by_id`, `get_runbook_tasks`, `get_runbook_teams`, `get_runbook_template_copies`, `get_runbook_type_by_id`, `get_stream`, `get_user`, `get_workspace_by_id`, `list_custom_field_groups`, `list_custom_fields`, `list_data_source_values`, `list_data_sources`, `list_folders`, `list_runbook_types`, `list_runbooks`, `list_streams`, `list_task_types`, `list_workspaces`, `query_runbook_types`, `query_workspaces`, `search_users` |
+| Creates and adds | false | false | false | `add_comment`, `add_task_to_runbook`, `create_custom_field`, `create_custom_field_group`, `create_data_source`, `create_runbook`, `create_stream`, `create_workspace` |
+| Updates | false | false | true | `update_custom_field`, `update_custom_field_group`, `update_data_source`, `update_runbook_task`, `update_stream` |
+| Updates (not idempotent) | false | false | false | `update_runbook` |
+| Archives and deletes | false | true | true | `archive_custom_field`, `archive_custom_field_group`, `archive_data_source`, `delete_stream`, `delete_task` |
+| Changes state or replaces data | false | true | false | `complete_task`, `get_data_source_upload_url`, `manage_data_source`, `manage_runbook`, `skip_task`, `start_task` |
+
+`openWorldHint` is true for the tools that reach beyond Cutover: `manage_runbook`, `start_task`, `complete_task` and `skip_task`, which can run integrations or send communications, and `manage_data_source`, which fetches the data source's URL. It is false for every other tool. `update_runbook` is not idempotent because `start_scheduled` accepts `"now"`. `get_data_source_upload_url` reads nothing from Cutover but returns a URL that can replace the file behind a data source, so it counts as a write.
 
 ### Tools
 
@@ -718,6 +733,7 @@ CUTOVER_API_TOKEN=MY_TOKEN_VALUE
 | `CUTOVER_CORE_URL`  | Yes      | Your Cutover instance URL, e.g. `https://your-instance.cutover.com`. Sent as the `Core-Url` header so the API routes to your instance.                        |
 | `CUTOVER_API_TOKEN` | Yes      | See [Generating an API Token](#generating-an-api-token) below.                                                                                               |
 | `CUTOVER_BASE_URL`  | No       | The Cutover API host. Defaults to `https://api.cutover.net`. Set it only for an instance with its own API host, e.g. `https://api.your-instance.cutover.com`. |
+| `MCP_READ_ONLY` | No | `true` exposes only the [read-only tools](#tool-annotations); write tools are neither listed nor callable. Any value other than true/false, 1/0 or yes/no stops the server from starting. |
 
 ### Generating an API Token
 
@@ -731,8 +747,8 @@ There are two ways to generate a token:
 The MCP server adds no security model of its own — it authenticates to the Cutover API as a single **user app token** over HTTPS and inherits exactly that user's permissions. Scope the token correctly and use the write tools deliberately:
 
 - **Least privilege.** Use a dedicated [non-interactive user](#generating-an-api-token) with the **Developer** role plus only the scoped roles the use case needs (e.g. Workspace manager on one workspace) — not a personal admin token. Rotate the token periodically and revoke it in Cutover when the use case ends.
-- **Read-only vs read-write.** This server ships write tools (`create_runbook`, `manage_runbook`, `delete_task`, `start_task`, …) and does not enforce read-only itself. For query-only use cases, omit roles that grant create/update/delete/manage — least privilege is configured in Cutover, not the client.
-- **Approve writes.** Keep human approval enabled for mutating or consequential actions — models can act on unexpected content returned by tools, so approval is the real safeguard.
+- **Read-only vs read-write.** This server ships write tools (`create_runbook`, `manage_runbook`, `delete_task`, `start_task`, …). For query-only use cases, set `MCP_READ_ONLY=true` so only the read-only tools are exposed, and also omit roles that grant create/update/delete/manage: the Cutover role is what the API enforces.
+- **Approve writes.** Keep human approval enabled for mutating or consequential actions — models can act on unexpected content returned by tools, so approval is the real safeguard. Every tool is [annotated](#tool-annotations), so a client that gates on `readOnlyHint` or `destructiveHint` can ask for approval on writes only.
 - **Verify critical output.** A tool call returns real data, but the model's summary of it can still be wrong (or answer with no tool call at all). For compliance- or audit-critical output, verify against Cutover as the system of record.
 - **Protect the token.** It lives in env config (`.env*` is git-ignored and excluded from Docker images). If a token is compromised, revoke it immediately in Cutover's Access Management — the MCP server holds no independent session, so revoking the token fully cuts off access, and a scoped role confines any impact to that use case.
 

@@ -4,6 +4,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from cutover_mcp.app import mcp
 from cutover_mcp.clients.api import client_mgr
+from cutover_mcp.tools.annotations import READ_ONLY, writes
 
 # apply_to slugs grouped by resource type; used for client-side scope filtering.
 TASK_APPLY_TO = ["task_edit", "task_start", "task_end", "task_add_edit"]
@@ -50,7 +51,7 @@ def _build_field(item: dict[str, Any]) -> dict[str, Any]:
     return field
 
 
-@mcp.tool()
+@mcp.tool(annotations=READ_ONLY)
 async def list_custom_fields(
     workspace_id: str | None = None,
     include_global: bool = True,
@@ -148,7 +149,7 @@ async def list_custom_fields(
     return [field for field in custom_fields if field.get("apply_to") in allowed]
 
 
-@mcp.tool()
+@mcp.tool(annotations=READ_ONLY)
 async def get_custom_field(
     custom_field_id: str,
 ) -> dict[str, Any]:
@@ -273,7 +274,7 @@ def _constraints(
     return constraints
 
 
-@mcp.tool()
+@mcp.tool(annotations=writes(destructive=False, idempotent=False))
 async def create_custom_field(
     name: str,
     field_type: CreatableFieldType,
@@ -393,7 +394,7 @@ async def create_custom_field(
     return await _read_back(client, response.get("data", {}))
 
 
-@mcp.tool()
+@mcp.tool(annotations=writes(destructive=False, idempotent=True))
 async def update_custom_field(
     custom_field_id: str,
     name: str | None = None,
@@ -520,7 +521,7 @@ async def update_custom_field(
     return await _read_back(client, response.get("data", {}))
 
 
-@mcp.tool()
+@mcp.tool(annotations=writes(destructive=True, idempotent=True))
 async def archive_custom_field(custom_field_id: str) -> dict[str, Any]:
     """
     Archive a custom field so it can no longer be used. Existing values stay on runbooks and
@@ -543,7 +544,7 @@ def _build_group(item: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-@mcp.tool()
+@mcp.tool(annotations=READ_ONLY)
 async def list_custom_field_groups() -> list[dict[str, Any]]:
     """
     List custom field groups, which control the section a custom field is shown in. Archived
@@ -563,7 +564,7 @@ async def list_custom_field_groups() -> list[dict[str, Any]]:
     return groups
 
 
-@mcp.tool()
+@mcp.tool(annotations=writes(destructive=False, idempotent=False))
 async def create_custom_field_group(name: str) -> dict[str, Any]:
     """
     Create a custom field group. Groups are shared across the instance. Check
@@ -579,7 +580,7 @@ async def create_custom_field_group(name: str) -> dict[str, Any]:
     return _build_group(response.get("data", {}))
 
 
-@mcp.tool()
+@mcp.tool(annotations=writes(destructive=False, idempotent=True))
 async def update_custom_field_group(custom_field_group_id: str, name: str) -> dict[str, Any]:
     """
     Rename a custom field group. Requires the Custom Fields Admin role (or Global Admin).
@@ -594,7 +595,7 @@ async def update_custom_field_group(custom_field_group_id: str, name: str) -> di
     return _build_group(response.get("data", {}))
 
 
-@mcp.tool()
+@mcp.tool(annotations=writes(destructive=True, idempotent=True))
 async def archive_custom_field_group(custom_field_group_id: str) -> dict[str, Any]:
     """
     Archive a custom field group. Requires the Custom Fields Admin role (or Global Admin).

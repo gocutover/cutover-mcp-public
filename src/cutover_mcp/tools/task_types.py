@@ -4,6 +4,7 @@ from typing import Any
 
 from cutover_mcp.app import mcp
 from cutover_mcp.clients.api import client_mgr
+from cutover_mcp.tools.annotations import READ_ONLY
 
 # Core masks the values of settings declared ``sensitive: true`` before they leave the API. Custom
 # integrations declare no settings and some built-in credentials are undeclared, so names and values
@@ -23,7 +24,7 @@ _MASKED_VALUE = re.compile(r"^\*+$")
 _MAX_VALUE_CHARS = 500
 
 
-@mcp.tool()
+@mcp.tool(annotations=READ_ONLY)
 async def list_task_types(include_integration: bool = True) -> dict[str, Any]:
     """
     List all task types, including the ones backed by an integration action.
@@ -55,7 +56,7 @@ async def list_task_types(include_integration: bool = True) -> dict[str, Any]:
     return await client.request("GET", "core/task_types", params=params)
 
 
-@mcp.tool()
+@mcp.tool(annotations=READ_ONLY)
 async def get_integration_task_type_details(integration_action_id: str) -> dict[str, Any]:
     """
     Get how an integration-backed task type is configured, to explain or choose it.

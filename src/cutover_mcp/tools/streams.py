@@ -3,9 +3,10 @@ from typing import Any
 from cutover_mcp.app import mcp
 from cutover_mcp.clients.api import client_mgr
 from cutover_mcp.models import StreamListResponse, StreamResponse, inject_return_schema
+from cutover_mcp.tools.annotations import READ_ONLY, writes
 
 
-@mcp.tool()
+@mcp.tool(annotations=READ_ONLY)
 @inject_return_schema
 async def list_streams(runbook_id: str, forecast: bool = False) -> StreamListResponse:
     """
@@ -27,7 +28,7 @@ async def list_streams(runbook_id: str, forecast: bool = False) -> StreamListRes
     return StreamListResponse(**response)
 
 
-@mcp.tool()
+@mcp.tool(annotations=writes(destructive=False, idempotent=False))
 @inject_return_schema
 async def create_stream(
     runbook_id: str,
@@ -68,7 +69,7 @@ async def create_stream(
     return StreamResponse(**response)
 
 
-@mcp.tool()
+@mcp.tool(annotations=READ_ONLY)
 @inject_return_schema
 async def get_stream(runbook_id: str, stream_id: str) -> StreamResponse:
     """
@@ -89,7 +90,7 @@ async def get_stream(runbook_id: str, stream_id: str) -> StreamResponse:
     return StreamResponse(**response)
 
 
-@mcp.tool()
+@mcp.tool(annotations=writes(destructive=False, idempotent=True))
 @inject_return_schema
 async def update_stream(
     runbook_id: str,
@@ -129,7 +130,7 @@ async def update_stream(
     return StreamResponse(**response)
 
 
-@mcp.tool()
+@mcp.tool(annotations=writes(destructive=True, idempotent=True))
 async def delete_stream(runbook_id: str, stream_id: str) -> dict[str, Any]:
     """
     Delete a stream from a runbook.

@@ -3,9 +3,10 @@ from typing import Any
 from cutover_mcp.app import mcp
 from cutover_mcp.clients.api import client_mgr
 from cutover_mcp.models import CommentListResponse, CommentResponse, inject_return_schema
+from cutover_mcp.tools.annotations import READ_ONLY, writes
 
 
-@mcp.tool()
+@mcp.tool(annotations=writes(destructive=False, idempotent=False))
 @inject_return_schema
 async def add_comment(
     runbook_id: str,
@@ -40,7 +41,7 @@ async def add_comment(
     return CommentResponse(**response)
 
 
-@mcp.tool()
+@mcp.tool(annotations=READ_ONLY)
 @inject_return_schema
 async def get_comments(
     runbook_id: str,

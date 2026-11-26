@@ -35,6 +35,8 @@ Over HTTP (`MCP_TRANSPORT` other than `stdio`, or any call made while serving an
 - Never log the token, request headers or response bodies.
 - Tests run as stdio unless they set `MCP_TRANSPORT` (`tests/conftest.py`).
 
+`MCP_READ_ONLY=true` (optional) exposes only the tools annotated read-only (`src/cutover_mcp/read_only.py`). It is read once, when `cutover_mcp.app` builds the server.
+
 If you don't have real credentials available, ask the user for values rather than inventing them — the first tool call raises a clear `ValueError` if `CUTOVER_API_TOKEN` is missing, or if neither `CUTOVER_CORE_URL` nor `CUTOVER_BASE_URL` is set.
 
 ## Running the server
@@ -75,3 +77,4 @@ uv run pytest
 
 - Formatting/linting via `ruff` (see `pyproject.toml`); a pre-commit config (`.pre-commit-config.yaml`) enforces this.
 - If a change adds, removes, renames, or changes the parameters/behavior of a `@mcp.tool()` in `src/cutover_mcp/tools/`, update the **Capabilities** section in both `README.md` and `README-PUBLIC.md` in the same PR — the group table, the tool's own `<details>` entry, and the tool/group counts in the section's opening sentence. Keep the two files in sync with each other (see [Project Structure](README.md#project-structure) for how they relate).
+- Every `@mcp.tool()` passes `annotations=` from `src/cutover_mcp/tools/annotations.py`: `READ_ONLY` for a tool that only reads, otherwise `writes(destructive=..., idempotent=...)`. `destructive=True` only when the change cannot be undone (deleting, archiving, replacing a data source's file or records, moving a runbook or task to another state); creating and updating are not destructive. Pass `open_world=True` if the tool reaches beyond the Cutover instance: it runs integrations, sends communications or fetches a URL. `tests/unit/test_tool_annotations.py` fails on a tool without annotations. List the tool in the **Tool annotations** table of both READMEs and update its counts.

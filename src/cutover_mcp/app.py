@@ -11,6 +11,7 @@ from starlette.responses import JSONResponse
 
 from cutover_mcp import __version__
 from cutover_mcp.clients.api import client_mgr
+from cutover_mcp.read_only import ReadOnlyTools, read_only_mode
 from cutover_mcp.security import host_policy
 
 # This is the central server instance that all other modules will import
@@ -27,6 +28,8 @@ async def app_lifespan(server: FastMCP) -> AsyncIterator[None]:
     # Every entry point runs this lifespan (server.py, `fastmcp run`, mcp.http_app()), so a
     # malformed TRUSTED_API_HOSTS stops each of them before any traffic is served.
     host_policy.trusted_api_hosts()
+    if read_only_mode():
+        logger.info("MCP_READ_ONLY is set: only read-only tools are available.")
     yield
     logger.info("Server shutting down...")
     await client_mgr.close_all()
@@ -37,6 +40,7 @@ mcp = FastMCP(
     version=__version__,
     instructions="A set of tools and resources for interacting with the Cutover platform.",
     lifespan=app_lifespan,
+    transforms=[ReadOnlyTools()] if read_only_mode() else [],
 )
 
 

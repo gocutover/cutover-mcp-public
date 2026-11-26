@@ -3,6 +3,10 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
+# cutover_mcp.app reads MCP_READ_ONLY once at import, after loading .env without overriding
+# what is already set, so this keeps a developer's .env from hiding write tools in tests.
+os.environ["MCP_READ_ONLY"] = "false"
+
 
 @pytest.fixture(autouse=True)
 def _stdio_transport(monkeypatch):
