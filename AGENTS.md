@@ -32,6 +32,7 @@ Three variables, all read from `.env` at runtime (see `src/cutover_mcp/clients/a
 Over HTTP (`MCP_TRANSPORT` other than `stdio`, or any call made while serving an HTTP request) there are rules that new code must keep:
 
 - Every request goes through `APIClient.request`. It pins the host to the client's API host and re-checks it against the `TRUSTED_API_HOSTS` allowlist in `src/cutover_mcp/security/host_policy.py`; a request sent any other way skips both.
+- `/mcp` requires an `Authorization: Bearer` header (`src/cutover_mcp/security/bearer.py`, 401 otherwise). The token comes only from that header: no `CUTOVER_API_TOKEN` fallback and no elicitation.
 - Never log the token, request headers or response bodies.
 - Tests run as stdio unless they set `MCP_TRANSPORT` (`tests/conftest.py`).
 

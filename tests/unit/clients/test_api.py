@@ -12,6 +12,7 @@ from cutover_mcp.clients.api import (
     CutoverConnectionError,
     CutoverCredentials,
     _credentials_from_elicitation,
+    _credentials_from_http_headers,
     default_base_url,
     normalise_core_url,
 )
@@ -705,16 +706,49 @@ async def test_over_http_get_client_refuses_an_untrusted_core_url_header(monkeyp
 
 
 @pytest.mark.asyncio
-async def test_over_http_get_client_refuses_an_untrusted_base_url_from_the_credentials_form(monkeypatch):
+async def test_over_http_a_missing_token_is_refused_without_the_credentials_form(monkeypatch):
     _over_http(monkeypatch)
-    elicited = AsyncMock(return_value=("token", "https://acme.cutover.com", "http://169.254.169.254"))
+    elicited = AsyncMock(return_value=("token", "https://acme.cutover.com", None))
 
     with (
-        _headers(api_key=None),
+        _headers(api_key=None, core_url="https://acme.cutover.com"),
         patch("cutover_mcp.clients.api._credentials_from_elicitation", elicited),
-        pytest.raises(UntrustedHostError, match="Base-Url"),
+        pytest.raises(ValueError, match="Authorization: Bearer"),
     ):
         await APIClientManager().get_client()
+
+    elicited.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_over_http_the_server_token_is_not_used_for_a_caller_without_one(monkeypatch):
+    _over_http(monkeypatch)
+    monkeypatch.setenv("CUTOVER_API_TOKEN", "server-token")
+
+    with (
+        _headers(api_key=None, core_url="https://acme.cutover.com"),
+        pytest.raises(ValueError, match="Authorization: Bearer"),
+    ):
+        await APIClientManager().get_client()
+
+
+@pytest.mark.parametrize(
+    ("header", "expected"),
+    [
+        ("Bearer token", "token"),
+        ("bearer token", "token"),
+        ("Bearer ", None),
+        ("Basic dXNlcjpwYXNz", None),
+        ("token", None),
+    ],
+)
+def test_only_a_bearer_authorization_header_supplies_the_token(header, expected):
+    request = MagicMock(headers={"authorization": header})
+
+    with patch("fastmcp.server.dependencies.get_http_request", return_value=request):
+        api_key, _, _ = _credentials_from_http_headers()
+
+    assert api_key == expected
 
 
 @pytest.mark.asyncio
@@ -853,31 +887,6 @@ async def test_get_client_checks_hosts_while_serving_http_whatever_mcp_transport
 
 
 @pytest.mark.asyncio
-async def test_rejected_answers_from_the_credentials_form_are_forgotten(monkeypatch):
-    _over_http(monkeypatch)
-    ctx = _mock_context(
-        get_state_side_effect=[None, None, None],
-        elicit_return_value=MagicMock(
-            action="accept",
-            data=CutoverCredentials(
-                core_url="https://acme.cutover.com", api_token="token", base_url="http://169.254.169.254"
-            ),
-        ),
-    )
-    ctx.delete_state = AsyncMock()
-
-    with (
-        _headers(api_key=None),
-        patch("fastmcp.server.dependencies.get_context", return_value=ctx),
-        pytest.raises(UntrustedHostError),
-    ):
-        await APIClientManager().get_client()
-
-    forgotten = {call.args[0] for call in ctx.delete_state.await_args_list}
-    assert forgotten == {"cutover_api_key", "cutover_core_url", "cutover_base_url"}
-
-
-@pytest.mark.asyncio
 @pytest.mark.parametrize("core_url", ["https://", "https:///app", "#/app/acme"])
 async def test_over_http_a_core_url_with_no_host_is_refused_not_dropped(monkeypatch, caplog, core_url):
     _over_http(monkeypatch)
@@ -893,21 +902,21 @@ async def test_over_http_a_core_url_with_no_host_is_refused_not_dropped(monkeypa
 
 
 @pytest.mark.asyncio
-async def test_a_core_url_with_no_host_from_the_credentials_form_is_forgotten(monkeypatch):
-    _over_http(monkeypatch)
+async def test_rejected_answers_from_the_credentials_form_are_forgotten(monkeypatch):
+    for name in ("CUTOVER_API_TOKEN", "CUTOVER_CORE_URL", "CUTOVER_BASE_URL"):
+        monkeypatch.delenv(name, raising=False)
     ctx = _mock_context(
         get_state_side_effect=[None, None, None],
         elicit_return_value=MagicMock(
             action="accept",
-            data=CutoverCredentials(core_url="https://", api_token="token", base_url="https://api.cutover.net"),
+            data=CutoverCredentials(core_url="https://acme.example.com", api_token="token"),
         ),
     )
     ctx.delete_state = AsyncMock()
 
     with (
-        _headers(api_key=None),
         patch("fastmcp.server.dependencies.get_context", return_value=ctx),
-        pytest.raises(UntrustedHostError),
+        pytest.raises(ValueError, match="Cannot derive"),
     ):
         await APIClientManager().get_client()
 

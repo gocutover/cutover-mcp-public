@@ -91,7 +91,7 @@ def normalise_core_url(core_url: str | None) -> str | None:
 
 
 class CutoverCredentials(BaseModel):
-    """Requested from the user via an interactive elicitation form."""
+    """Requested from the user via an interactive elicitation form (stdio only)."""
 
     core_url: str = Field(
         description="Your Cutover instance URL. Must be an absolute URL with scheme, "
@@ -331,8 +331,9 @@ def _credentials_from_http_headers() -> tuple[str | None, str | None, str | None
 
     api_key = None
     auth = headers.get("authorization", "")
-    if auth.startswith("Bearer "):
-        api_key = auth.removeprefix("Bearer ").strip()
+    # The scheme is case-insensitive (RFC 7235), as in the check that guards /mcp.
+    if auth[:7].lower() == "bearer ":
+        api_key = auth[7:].strip() or None
 
     core_url = headers.get("core-url") or None
     base_url = headers.get("base-url") or None
@@ -342,10 +343,11 @@ def _credentials_from_http_headers() -> tuple[str | None, str | None, str | None
 async def _credentials_from_elicitation() -> tuple[str | None, str | None, str | None]:
     """Try to obtain (api_key, core_url, base_url) via an interactive client-side form.
 
-    Caches an accepted answer in session state so the user is only prompted
-    once per session. Returns (None, None, None) outside a live session (e.g.
-    stdio), if the connected client doesn't support elicitation, or if the
-    user declines/cancels the prompt.
+    Only used over stdio: a form must not carry a secret over HTTP, where the token
+    comes from the Authorization header. Caches an accepted answer in session state so
+    the user is only prompted once per session. Returns (None, None, None) outside a
+    live session, if the connected client doesn't support elicitation, or if the user
+    declines/cancels the prompt.
     """
     try:
         from fastmcp.server.dependencies import get_context
@@ -434,9 +436,10 @@ class APIClientManager:
     When running over streamable-http, the Cutover API token, Core-Url, and
     Base-Url are read from the incoming request's Authorization / Core-Url /
     Base-Url headers (per-user, so a single deployment can serve sessions
-    targeting different Cutover environments). Falls back to env vars for
-    stdio / local development, and as a last resort prompts the connected
-    client interactively (session-cached) if it supports elicitation.
+    targeting different Cutover environments). The token only ever comes from
+    the header there: no shared CUTOVER_API_TOKEN and no credentials form.
+    Over stdio the env vars are used, and as a last resort the connected client
+    is prompted interactively (session-cached) if it supports elicitation.
 
     The base URL is optional everywhere: when absent it is derived from the
     Core-Url with default_base_url(), so shared production tenants only need
@@ -450,13 +453,16 @@ class APIClientManager:
         """Gets a client, preferring per-request HTTP credentials over env vars."""
         over_http = host_policy.enforced()
         header_api_key, header_core_url, header_base_url = _credentials_from_http_headers()
-        api_key = header_api_key or os.getenv("CUTOVER_API_TOKEN") or None
+        # Over HTTP the token is the caller's own: never the server's, never asked for in a form.
+        api_key = header_api_key
+        if not api_key and not over_http:
+            api_key = os.getenv("CUTOVER_API_TOKEN") or None
         supplied_core_url = header_core_url or os.getenv("CUTOVER_CORE_URL")
         core_url = normalise_core_url(supplied_core_url)
         base_url = header_base_url or os.getenv("CUTOVER_BASE_URL") or None
 
         from_form = False
-        if not api_key:
+        if not api_key and not over_http:
             elicited_key, elicited_core_url, elicited_base_url = await _credentials_from_elicitation()
             if elicited_key:
                 api_key = elicited_key
@@ -467,6 +473,8 @@ class APIClientManager:
                 base_url = base_url or elicited_base_url
 
         if not api_key:
+            if over_http:
+                raise ValueError("Send your Cutover API token as an Authorization: Bearer header.")
             raise ValueError("CUTOVER_API_TOKEN must be set (or sent as an Authorization: Bearer header).")
 
         try:

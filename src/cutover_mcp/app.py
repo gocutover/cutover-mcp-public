@@ -13,6 +13,7 @@ from cutover_mcp import __version__
 from cutover_mcp.clients.api import client_mgr
 from cutover_mcp.read_only import ReadOnlyTools, read_only_mode
 from cutover_mcp.security import host_policy
+from cutover_mcp.security.bearer import RequireBearerToken
 
 # This is the central server instance that all other modules will import
 # to register their tools and resources.
@@ -41,6 +42,8 @@ mcp = FastMCP(
     instructions="A set of tools and resources for interacting with the Cutover platform.",
     lifespan=app_lifespan,
     transforms=[ReadOnlyTools()] if read_only_mode() else [],
+    # Over HTTP, /mcp needs an Authorization: Bearer header; stdio is not affected.
+    auth=RequireBearerToken(),
 )
 
 
