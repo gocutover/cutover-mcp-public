@@ -48,6 +48,8 @@ def main() -> None:
         logger.info("Trusted API hosts: %s", ", ".join(sorted(".".join(p.labels) for p in trusted)))
         mcp.run(
             transport=transport,
+            # No server-side sessions, so any replica can serve any request. SSE cannot run stateless.
+            stateless_http=transport != "sse",
             host=os.getenv("MCP_HOST", "0.0.0.0"),
             port=int(os.getenv("MCP_PORT", "8000")),
         )

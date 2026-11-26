@@ -34,6 +34,7 @@ Over HTTP (`MCP_TRANSPORT` other than `stdio`, or any call made while serving an
 - Every request goes through `APIClient.request`. It pins the host to the client's API host and re-checks it against the `TRUSTED_API_HOSTS` allowlist in `src/cutover_mcp/security/host_policy.py`; a request sent any other way skips both.
 - `/mcp` requires an `Authorization: Bearer` header (`src/cutover_mcp/security/bearer.py`, 401 otherwise). The token comes only from that header: no `CUTOVER_API_TOKEN` fallback and no elicitation.
 - Never log the token, request headers or response bodies.
+- The server is stateless (`stateless_http` in `server.py`): no session survives a request, so `ctx.get_state`/`set_state`, `ctx.elicit` and other server-to-client requests cannot be relied on.
 - Tests run as stdio unless they set `MCP_TRANSPORT` (`tests/conftest.py`).
 
 `MCP_READ_ONLY=true` (optional) exposes only the tools annotated read-only (`src/cutover_mcp/read_only.py`). It is read once, when `cutover_mcp.app` builds the server.
